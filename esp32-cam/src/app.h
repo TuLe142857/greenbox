@@ -71,7 +71,6 @@ void App::init(
     this->initCommandHandlers();
     
     connectWifi(this->wifi_ssid, this->wifi_password);
-    digitalWrite(LED_PIN, WiFi.status() == WL_CONNECTED ? LED_ON : LED_OFF);
 }
 
 void App::initCommandHandlers()
@@ -116,13 +115,11 @@ void App::run()
 {
     if (WiFi.status() != WL_CONNECTED)
     {
-        Serial.println("Reconnect wifi...");
         connectWifi(this->wifi_ssid, this->wifi_password);
-        digitalWrite(LED_PIN, WiFi.status() == WL_CONNECTED ? LED_ON : LED_OFF);
-        Serial.println(WiFi.status() == WL_CONNECTED ? "WiFi reconnected" : "Can not connect wifi");
     }
 
     this->uart.run();
+    
     if (WiFi.status() == WL_CONNECTED)
         this->myBlynk.run();
 

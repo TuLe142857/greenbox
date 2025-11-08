@@ -121,6 +121,7 @@ void connectWifi(const char *ssid, const char *password, int timeout_second)
         digitalWrite(LED_PIN, count%2);
         delay(500);
     }
+    digitalWrite(LED_PIN, WiFi.status() == WL_CONNECTED ? LED_ON : LED_OFF);
 }
 
 #endif
