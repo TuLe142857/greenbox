@@ -4,6 +4,7 @@
 #include <Arduino.h>
 #include <HTTPClient.h>
 #include <functional>
+#include <map>
 
 #include "camera.h"
 #include "utils.h"
@@ -18,13 +19,10 @@
 class UART
 {
 private:
-    std::function<camera_fb_t *(bool flash_on)> capture;
-    const char *server_url;
-
+    std::map<String, std::function<void(std::vector<String> tokens)>> command_handlers;
 public:
-    void init(const char *server_url, std::function<camera_fb_t *(bool flash_on)> captureCallback);
-    void classifyGarbage(bool flash_on = false);
-    String runCommand(String command);
+    void init();
+    void addCommandHandler(String command, std::function<void(std::vector<String> tokens)> handler);
     void run();
 };
 
@@ -34,69 +32,25 @@ public:
 -------------------------------------------------
 */
 
-void UART::init(const char *server_url, std::function<camera_fb_t *(bool flash_on)> captureCallback)
-{
-    this->server_url = server_url;
-    this->capture = captureCallback;
+void UART::init(){}
+
+void UART::addCommandHandler(String command, std::function<void(std::vector<String> tokens)> handler){
+    this->command_handlers[command] = handler;
 }
 
-String UART::runCommand(String command)
-{
-    Serial.println(command);
-    return Serial.readStringUntil('\n');
-}
-
-void UART::classifyGarbage(bool flash_on)
-{
-    camera_fb_t *fb = this->capture(flash_on);
-
-    // SEND IMAGE TO SERVER
-    Serial.printf("Send image to server %s\n", this->server_url);
-
-    bool run_http = true;
-    String response;
-    if (WiFi.status() != WL_CONNECTED)
-    {
-        response = "ERROR WIFI_NOT_CONNECTED";
-        run_http = false;
-    }
-
-    if (run_http)
-    {
-        HTTPClient http;
-        http.begin(this->server_url);
-        http.setTimeout(15000);
-        http.addHeader("Content-Type", "image/jpeg");
-        int http_code = http.POST(fb->buf, fb->len);
-        if (http_code > 0)
-            response = http.getString();
-        else
-        {
-            response = "ERROR HTTP" + String(http_code);
-            http.end();
-        }
-    }
-
-    esp_camera_fb_return(fb);
-    Serial.println(response);
-}
 
 void UART::run()
 {
     if (!Serial.available())
         return;
-
-    std::vector<String> tokens = parse_tokens(Serial.readStringUntil('\n'));
-
-    Serial.printf("Get %d tokens\n", tokens.size());
-    for (String tk : tokens)
-    {
-        Serial.println(tk);
-    }
-    if (tokens[0] == "CLASSIFY")
-    {
-        bool flash_on = tokens.size() > 1 && tokens[1] == "--flash";
-        this->classifyGarbage(flash_on);
+    String s = Serial.readStringUntil('\n');
+    // Serial.println("ESP Recieved "+ s);
+    std::vector<String> tokens = parse_tokens(s);
+    
+    if (tokens.size() == 0)
+        return;
+    if (this->command_handlers.count(tokens[0])){
+        this->command_handlers[tokens[0]](tokens);
     }
 }
 
