@@ -22,6 +22,9 @@ private:
 
     const char *wifi_ssid;
     const char *wifi_password;
+    const char *server_url;
+
+    void initCommandHandlers();
 
 public:
     App() {};
@@ -31,33 +34,6 @@ public:
         const char *wifi_password,
         const char *server_url,
         const char *blynk_auth_token);
-
-    /**
-     * @brief Set camera JPEG quality
-     * @param quality 0-63 lower means higher quality(default 12)
-     */
-    void setCameraQuality(int quality);
-
-    /**
-     * @brief Set the camera frame size. Default FRAMESIZE_240X240
-     *
-     * @param fs The frame size to set.
-     * - FRAMESIZE_96X96      : 96 x 96
-     * - FRAMESIZE_QQVGA      : 160 x 120
-     * - FRAMESIZE_QCIF       : 176 x 144
-     * - FRAMESIZE_HQVGA      : 240 x 176
-     * - FRAMESIZE_240X240    : 240 x 240
-     * - FRAMESIZE_QVGA       : 320 x 240
-     * - FRAMESIZE_CIF        : 400 x 296
-     * - FRAMESIZE_HVGA       : 480 x 320
-     * - FRAMESIZE_VGA        : 640 x 480
-     * - FRAMESIZE_SVGA       : 800 x 600
-     * - FRAMESIZE_XGA        : 1024 x 768
-     * - FRAMESIZE_HD         : 1280 x 720
-     * - FRAMESIZE_SXGA       : 1280 x 1024
-     * - FRAMESIZE_UXGA       : 1600 x 1200
-     */
-    void setCameraFrameSize(framesize_t fs);
 
     void run();
 };
@@ -74,52 +50,66 @@ void App::init(
     const char *server_url,
     const char *blynk_auth_token)
 {
-    Serial.println("Init App");
-
     this->wifi_ssid = wifi_ssid;
     this->wifi_password = wifi_password;
+    this->server_url = server_url;
 
-    Serial.println("Init camera");
     this->camera.init();
 
-    Serial.println("Init uart");
-    this->uart.init(
-        server_url,
+    this->uart.init();
 
-        // callback funtion capture camera
-        [this](bool flash_on)
-        {
-            return this->camera.capture(flash_on);
-        });
+    this->myBlynk.init(blynk_auth_token);
 
-    Serial.println("Init blynk");
-    this->myBlynk.init(
-        blynk_auth_token,
-
-        // callback funtion send data
+    this->myBlynk.addTimerFunction(
+        // request get data
         [this]()
         {
-            // fake data
-            Blynk.virtualWrite(V0, 25.3);
-            Blynk.virtualWrite(V1, 22.9);
-            Blynk.virtualWrite(V2, 50.5);
-            Blynk.virtualWrite(V3, 90.55);
+            Serial.println("GET_GARBAGE_BIN_LEVEL");
         });
 
-    Serial.println("Connect WiFi...");
+        
+    this->initCommandHandlers();
+    
     connectWifi(this->wifi_ssid, this->wifi_password);
     digitalWrite(LED_PIN, WiFi.status() == WL_CONNECTED ? LED_ON : LED_OFF);
-    Serial.println(WiFi.status() == WL_CONNECTED ? "WiFi connected" : "Can not connect wifi");
 }
 
-void App::setCameraFrameSize(framesize_t fs)
+void App::initCommandHandlers()
 {
-    this->camera.setFrameSize(fs);
-}
+    // return "CLASS " + <response>
+    this->uart.addCommandHandler(
+        "CLASSIFY",
+        [this](std::vector<String> tokens){
+            bool flash_on = tokens.size() > 1 && tokens[1] == "--flash";
+            camera_fb_t * fb = this->camera.capture(flash_on);
 
-void App::setCameraQuality(int quality)
-{
-    this->camera.setQuality(quality);
+            String response = sendImageToServer(fb, this->server_url);
+            Serial.println(response);
+
+            esp_camera_fb_return(fb);
+        }
+    );
+
+    this->uart.addCommandHandler(
+        "GARBAGE_BIN_LEVEL",
+        [this](std::vector<String> tokens)
+        {
+            if (tokens.size() == 5)
+            {
+                Blynk.virtualWrite(V0, tokens[1].toFloat());
+                Blynk.virtualWrite(V1, tokens[2].toFloat());
+                Blynk.virtualWrite(V2, tokens[3].toFloat());
+                Blynk.virtualWrite(V3, tokens[4].toFloat());
+            }
+            else
+            {
+                Blynk.virtualWrite(V0, 25);
+                Blynk.virtualWrite(V1, 25);
+                Blynk.virtualWrite(V2, 50);
+                Blynk.virtualWrite(V3, 50);
+            }
+        });
+
 }
 
 void App::run()
@@ -133,7 +123,6 @@ void App::run()
     }
 
     this->uart.run();
-
     if (WiFi.status() == WL_CONNECTED)
         this->myBlynk.run();
 
