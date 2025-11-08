@@ -1,9 +1,18 @@
-#include <Arduino.h>
+#include "config.h"
+#include "app.h"
 
-void setup() {
-  
+App app;
+void setup()
+{
+    Serial.begin(115200);
+    app.init(
+        WIFI_SSID,
+        WIFI_PASSWORD,
+        SERVER_URL,
+        BLYNK_AUTH_TOKEN);
 }
 
-void loop() {
-
+void loop()
+{
+    app.run();
 }
