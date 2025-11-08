@@ -1,14 +1,11 @@
-#include <Arduino.h>
+#include "app.h"
 
-
+App app;
 void setup() {
-
+    Serial.begin(115200);
+    app.init();
 }
 
 void loop() {
-
-}
-
-int myFunction(int x, int y) {
-
+    app.run();
 }
