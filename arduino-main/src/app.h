@@ -65,12 +65,10 @@ extern App app;
 */
 
 void App::init(){
-    Serial.println("CLASSIFY --flash");
     this->uart.init();
     this->initCommandHandlers();
 
-    // device pin
-
+    // devices pin
     this->garbageBinCapacitySensor[0].attach(2, 3);
     this->garbageBinCapacitySensor[1].attach(4, 5);
     this->garbageBinCapacitySensor[2].attach(6, 7);
@@ -107,7 +105,6 @@ float App::getBinLevel(int binId){
         garbage_fill_height = 0;
     if (garbage_fill_height > BIN_TOTAL_DEPTH_CM)
         garbage_fill_height = BIN_TOTAL_DEPTH_CM;
-    // return d;
     return (garbage_fill_height/BIN_TOTAL_DEPTH_CM) * 100;
 }
 
@@ -137,7 +134,7 @@ void App::initCommandHandlers(){
      */
     this->uart.addCommandHandler(
         "GET_GARBAGE_BIN_LEVEL",
-        [](String *tokens, int n){
+        [](String tokens[], int n){
             float bin_levels[GARBAGE_BIN_COUNT];
             for (int i = 0; i < GARBAGE_BIN_COUNT; i++){
                 bin_levels[i] = app.getBinLevel(i);
@@ -159,7 +156,7 @@ void App::initCommandHandlers(){
      */
     this->uart.addCommandHandler(
         "CLASS",
-        [](String *tokens, int n){
+        [](String tokens[], int n){
             if (n == 1)
                 return;
             int classify_result = tokens[1].toInt();
@@ -171,9 +168,6 @@ void App::initCommandHandlers(){
 
 void App::run(){
     this->uart.run();
-    // Serial.print("human detect ");
-    // Serial.println(this->isHumanNearBy());
-    // Serial.print("state "); Serial.println(this->current_state);
 
     switch (this->current_state)
     {

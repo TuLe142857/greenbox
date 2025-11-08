@@ -9,7 +9,7 @@
 ------------------------------------------------
 */
 
-String * parse_token(String s, int &size);
+void parse_tokens(String s, String tokens[], int max_tokens, int &token_count);
 
 
 /*
@@ -18,65 +18,50 @@ String * parse_token(String s, int &size);
 ------------------------------------------------
 */
 
-String * parse_token(String s, int &size){
+void parse_tokens(String s, String tokens[], int max_tokens, int &token_count) {
+    token_count = 0;
     s.trim();
-    size =0;
-    if(s.length() == 0)
-        return nullptr;
-
     int start = 0;
-    int end = 0;
-    while(start < s.length()){
-        if (s[start] == '"'){
-            start ++;
-            end = start+1;
-            while(end < s.length() && s[end] != '"')
-                end ++;
-            size ++;
 
-            end++;
-            while(end < s.length() && s[end] == ' ')
-                end ++;
-            start = end;
-        }else{
-            end = start+1;
-            while(end < s.length() && s[end] != ' ')
-                end ++;
-            size ++;
+    if (s.length() == 0 || max_tokens == 0) {
+        return;
+    }
 
-            while(end < s.length() && s[end] == ' ')
-                end ++;
+    while (start < s.length() && token_count < max_tokens) {
+        while (start < s.length() && s[start] == ' ') {
+            start++;
+        }
+        
+        if (start >= s.length()) {
+            break; 
+        }
+
+        int end;
+        if (s[start] == '"') {
+            start++;
+            end = s.indexOf('"', start);
+            
+            if (end == -1) { 
+                end = s.length();
+            }
+            
+            tokens[token_count] = s.substring(start, end);
+            start = end + 1;
+            
+        } else {
+            end = s.indexOf(' ', start);
+            
+            if (end == -1) {
+                end = s.length();
+            }
+            
+            tokens[token_count] = s.substring(start, end);
             start = end;
         }
+        token_count++; 
     }
-    String *tokens = new String[size];
-
-    start = 0;
-    int idx=0;
-    while(start < s.length()){
-        if (s[start] == '"'){
-            start ++;
-            end = start+1;
-            while(end < s.length() && s[end] != '"')
-                end ++;
-            tokens[idx++] = s.substring(start, end);
-
-            end++;
-            while(end < s.length() && s[end] == ' ')
-                end ++;
-            start = end;
-        }else{
-            end = start+1;
-            while(end < s.length() && s[end] != ' ')
-                end ++;
-            tokens[idx++] = s.substring(start, end);
-
-            while(end < s.length() && s[end] == ' ')
-                end ++;
-            start = end;
-        }
-    }
-    return tokens;
+    
 }
+
 
 #endif
