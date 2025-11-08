@@ -24,12 +24,16 @@ enum AppState {
         NORMAL,
         WAITING_FOR_GARBAGE, // lid opened
         CLASSIFYING,        // sending image to server, wait for response
-        DROPPING_GARBAGE    // received response from server, doing classify
+        DROPPING_GARBAGE,    // received response from server, doing classify
+        ERROR
     };
 
 class App{
 private:
     AppState current_state = NORMAL;
+    AppState previous_state = NORMAL;
+    String error_message;
+
     int binIdToDrop = -1;
 
     UART uart;
@@ -38,7 +42,7 @@ private:
     TripleServo tripleServo;
     Servo lidServo;
     UltraSonicSensor garbageDetectSensor, humanDetectSensor;
-    UltraSonicSensor garbageBinCapacitySensor[GARBAGE_BIN_COUNT];
+    UltraSonicSensor garbageBinLevelSensor[GARBAGE_BIN_COUNT];
 
     void initCommandHandlers();
 public:
@@ -47,6 +51,16 @@ public:
     bool isGarbageOnTray();
     bool isHumanNearBy();
     float getBinLevel(int binId);
+
+    void setState(AppState state){
+        this->previous_state = current_state;
+        this->current_state = state;
+    }
+
+    void setErrorMessage(String s){
+        this->error_message = s;
+        this->setState(ERROR);
+    }
 
     void setDropTarget(int binId);
     void dropGarbageAt(int binId);
@@ -69,10 +83,10 @@ void App::init(){
     this->initCommandHandlers();
 
     // devices pin
-    this->garbageBinCapacitySensor[0].attach(2, 3);
-    this->garbageBinCapacitySensor[1].attach(4, 5);
-    this->garbageBinCapacitySensor[2].attach(6, 7);
-    this->garbageBinCapacitySensor[3].attach(8, 9);
+    this->garbageBinLevelSensor[0].attach(2, 3);
+    this->garbageBinLevelSensor[1].attach(4, 5);
+    this->garbageBinLevelSensor[2].attach(6, 7);
+    this->garbageBinLevelSensor[3].attach(8, 9);
 
     this->lidServo.attach(10);
     this->humanDetectSensor.attach(11, 12);
@@ -85,8 +99,7 @@ void App::init(){
 }
 
 bool App::isGarbageOnTray(){
-    return false;
-    // return (this->garbageDetectSensor.measureDistanceCM() < GARBAGE_ON_TRAY_DETECT_THRESHOLD_CM);
+     return (this->garbageDetectSensor.measureDistanceCM() < GARBAGE_ON_TRAY_DETECT_THRESHOLD_CM);
 }
 
 bool App::isHumanNearBy(){
@@ -98,7 +111,7 @@ float App::getBinLevel(int binId){
         return 0;
     }
 
-    float d = this->garbageBinCapacitySensor[binId].measureDistanceCM();
+    float d = this->garbageBinLevelSensor[binId].measureDistanceCM();
     float garbage_fill_height = (BIN_TOTAL_DEPTH_CM + GARBAGE_CAPACITY_SENSOR_OFF_SET_CM) - d;
 
     if (garbage_fill_height < 0)
@@ -113,7 +126,7 @@ void App::setDropTarget(int binId){
         return;
     }
     this->binIdToDrop = binId;
-    this->current_state = DROPPING_GARBAGE;
+    this->setState(DROPPING_GARBAGE);
 }
 
 void App::dropGarbageAt(int binId){
@@ -122,7 +135,7 @@ void App::dropGarbageAt(int binId){
     }
     int angle = (binId * 90) + 45;
     this->tripleServo.dropAt(angle);
-    this->current_state = NORMAL;
+    this->setState(NORMAL);
 }
 
 void App::initCommandHandlers(){
@@ -163,43 +176,119 @@ void App::initCommandHandlers(){
             app.setDropTarget(classify_result);
         }
     );
+
+    this->uart.addCommandHandler(
+        "ERROR",
+        [](String tokens[], int n){
+            String message = "";
+            for(int i = 1; i < n; i++){
+                message += tokens[i] + " ";
+            }
+            app.setErrorMessage(message);
+        }
+        
+    );
 }
 
 
 void App::run(){
+    /*
+    --------------------------------
+                DEBUG
+    --------------------------------
+    */
+    String enumName[] = {"NORMAL", "WAITING_FOR_GARBAGE", "CLASSIFYING", "DROPPING_GARBAGE", "ERROR"};
+    Serial.println("DEBUG ARDUINO");
+    Serial.println("\t App State: " + enumName[this->current_state]);
+    Serial.println("\t App Previous State: " + enumName[this->previous_state]);
+    Serial.println("\t Sensor value: ");
+
+        Serial.println("\t\tGarbage Bin Level Sensor:");
+        for(int i = 0; i < GARBAGE_BIN_COUNT; i++){
+            float distance = this->garbageBinLevelSensor[i].measureDistanceCM();
+            float percent = this->getBinLevel(i);
+            Serial.println(
+                "\t\t\tBin " + String(i) + ": "
+                + String(distance) + " cm ~ "
+                + String(percent) + " %"
+            );
+        }
+            
+    
+        Serial.println(
+            "\t\tHuman Detect sensor(cm): "
+            + String(this->humanDetectSensor.measureDistanceCM()) + " cm ~ "
+            + (this->isHumanNearBy() ? "True" : "False")
+        );
+        
+
+        Serial.println(
+            "\t\tGarbage on tray detect sensor(cm): "
+            + String(this->garbageDetectSensor.measureDistanceCM()) + " cm ~ "
+            + (this->isGarbageOnTray() ? "True" : "False")
+        );
+    
+    Serial.println("\tLid servo angle: " + String(this->lidServo.read()));
+
+
     this->uart.run();
 
     switch (this->current_state)
     {
-    case NORMAL:
-        if (this->isHumanNearBy()){
-            this->lidServo.write(90);
-            this->current_state = WAITING_FOR_GARBAGE;
-        }
-        break;
+        case NORMAL:
+            if (this->isHumanNearBy()){
+                this->lidServo.write(90);
+                this->setState(WAITING_FOR_GARBAGE);
+            }
+            break;
 
-    case WAITING_FOR_GARBAGE:
-        if (this->isGarbageOnTray()){
-            // call esp32-cam to capture image and send to server 
-            this->current_state = CLASSIFYING;
-            this->lidServo.write(0);
-            Serial.println("CLASSIFY");
-        }
-        else if(!this->isHumanNearBy()){
-            this->current_state = NORMAL;
-            this->lidServo.write(0);
-        }
-        break;
+        case WAITING_FOR_GARBAGE:
+            if (this->isGarbageOnTray()){
+                // call esp32-cam to capture image and send to server 
+                this->setState(CLASSIFYING);
+                this->lidServo.write(0);
+                Serial.println("CLASSIFY");
+            }
+            else if(!this->isHumanNearBy()){
+                this->setState(NORMAL);
+                this->lidServo.write(0);
+            }
+            break;
 
-    case CLASSIFYING:
-        // process on uart, nothing to do here
-        break;
+        case CLASSIFYING:
+            // process on uart, nothing to do here
+            break;
 
-    case DROPPING_GARBAGE:
-        this->dropGarbageAt(this->binIdToDrop);
-        break;
+        case DROPPING_GARBAGE:
+            this->dropGarbageAt(this->binIdToDrop);
+            break;
+        
+        case ERROR:
+            //hanle error
+            Serial.println("Something wrong: " + this->error_message);
+            switch (this->previous_state)
+            {
+                case NORMAL:
+                    this->setState(NORMAL);
+                    break;
+                case WAITING_FOR_GARBAGE:
+                    this->setState(WAITING_FOR_GARBAGE);
+                    break;
+                case CLASSIFYING:
+                    // retry classify
+                    this->setState(CLASSIFYING);
+                    Serial.println("CLASSIFY");
+                    break;
+                case DROPPING_GARBAGE:
+                    this->setState(DROPPING_GARBAGE);
+                    break;
+            }
+
+            break;
+
     }
 
+    
     
 
     delay(10);
