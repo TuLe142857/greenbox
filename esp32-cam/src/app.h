@@ -34,7 +34,7 @@ public:
         const char *wifi_password,
         const char *server_url,
         const char *blynk_auth_token,
-        unsigned long blynk_update_interval_ms=15UL * 60UL * 1000UL // 15 minutes
+        unsigned long blynk_update_interval_ms = 15UL * 60UL * 1000UL // 15 minutes
     );
 
     void run();
@@ -51,8 +51,7 @@ void App::init(
     const char *wifi_password,
     const char *server_url,
     const char *blynk_auth_token,
-    unsigned long blynk_update_interval_ms
-)
+    unsigned long blynk_update_interval_ms)
 {
     this->wifi_ssid = wifi_ssid;
     this->wifi_password = wifi_password;
@@ -105,21 +104,11 @@ void App::initCommandHandlers()
         {
             if (tokens.size() >= 5)
             {
-                float binLevel[4] = {tokens[1].toFloat(), tokens[2].toFloat(), tokens[3].toFloat(), tokens[4].toFloat()};
-                Blynk.virtualWrite(V0, binLevel[0]);
-                Blynk.virtualWrite(V1, binLevel[1]);
-                Blynk.virtualWrite(V2, binLevel[2]);
-                Blynk.virtualWrite(V3, binLevel[3]);
-                
-                if(
-                    (binLevel[0] >= 90) || 
-                    (binLevel[1] >= 90) || 
-                    (binLevel[2] >= 90) || 
-                    (binLevel[3] >= 90)
-                )
-                {
-                    this->myBlynk.notification("Rác đầy, vui lòng đổ rác");
-                }
+                this->myBlynk.updateBinLevel(
+                    tokens[1].toFloat(),
+                    tokens[2].toFloat(),
+                    tokens[3].toFloat(),
+                    tokens[4].toFloat());
             }
         });
 
@@ -132,9 +121,7 @@ void App::initCommandHandlers()
                 String message = tokens[1];
                 this->myBlynk.notification(message);
             }
-            
-        }
-    );
+        });
 }
 
 void App::run()
