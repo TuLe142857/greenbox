@@ -103,21 +103,38 @@ void App::initCommandHandlers()
         "GARBAGE_BIN_LEVEL",
         [this](std::vector<String> tokens)
         {
-            if (tokens.size() == 5)
+            if (tokens.size() >= 5)
             {
-                Blynk.virtualWrite(V0, tokens[1].toFloat());
-                Blynk.virtualWrite(V1, tokens[2].toFloat());
-                Blynk.virtualWrite(V2, tokens[3].toFloat());
-                Blynk.virtualWrite(V3, tokens[4].toFloat());
-            }
-            else
-            {
-                Blynk.virtualWrite(V0, 25);
-                Blynk.virtualWrite(V1, 25);
-                Blynk.virtualWrite(V2, 50);
-                Blynk.virtualWrite(V3, 50);
+                float binLevel[4] = {tokens[1].toFloat(), tokens[2].toFloat(), tokens[3].toFloat(), tokens[4].toFloat()};
+                Blynk.virtualWrite(V0, binLevel[0]);
+                Blynk.virtualWrite(V1, binLevel[1]);
+                Blynk.virtualWrite(V2, binLevel[2]);
+                Blynk.virtualWrite(V3, binLevel[3]);
+                
+                if(
+                    (binLevel[0] >= 90) || 
+                    (binLevel[1] >= 90) || 
+                    (binLevel[2] >= 90) || 
+                    (binLevel[3] >= 90)
+                )
+                {
+                    this->myBlynk.notification("Rác đầy, vui lòng đổ rác");
+                }
             }
         });
+
+    this->uart.addCommandHandler(
+        "NOTIFICATION",
+        [this](std::vector<String> tokens)
+        {
+            if (tokens.size() >= 1)
+            {
+                String message = tokens[1];
+                this->myBlynk.notification(message);
+            }
+            
+        }
+    );
 }
 
 void App::run()
@@ -132,7 +149,7 @@ void App::run()
     if (WiFi.status() == WL_CONNECTED)
         this->myBlynk.run();
 
-    delay(5);
+    delay(10);
 }
 
 #endif

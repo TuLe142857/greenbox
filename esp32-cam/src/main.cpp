@@ -9,7 +9,9 @@ void setup()
         WIFI_SSID,
         WIFI_PASSWORD,
         SERVER_URL,
-        BLYNK_AUTH_TOKEN);
+        BLYNK_AUTH_TOKEN,
+        BLYNK_UPDATE_INTERVAL_MS
+    );
 }
 
 void loop()

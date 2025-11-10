@@ -17,7 +17,8 @@ private:
 
 public:
     void init(const char *auth_token);
-    void addTimerFunction(std::function<void ()> callback, unsigned long interval=2000L);
+    void addTimerFunction(std::function<void()> callback, unsigned long interval = 2000L);
+    void notification(String message);
     void run();
 };
 
@@ -32,8 +33,15 @@ void MyBlynk::init(const char *auth_token)
     Blynk.config(auth_token);
 }
 
-void MyBlynk::addTimerFunction(std::function<void ()> callback, unsigned long interval){
+void MyBlynk::addTimerFunction(std::function<void()> callback, unsigned long interval)
+{
     this->timer.setInterval(interval, callback);
+}
+
+void MyBlynk::notification(String message)
+{
+    Blynk.logEvent("notification", message);
+    Blynk.virtualWrite(V4, message);
 }
 
 void MyBlynk::run()
