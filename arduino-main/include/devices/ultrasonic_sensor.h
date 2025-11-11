@@ -34,7 +34,7 @@ float UltraSonicSensor::measureDistanceCM(){
 
 
     unsigned long t = pulseIn(this->echo_pin, HIGH);
-    return t/58.0;
+    return t*0.01715;
 }
 
 
