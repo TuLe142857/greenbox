@@ -1,11 +1,12 @@
 #include "app.h"
 
-App app;
-void setup() {
+void setup()
+{
     Serial.begin(115200);
     app.init();
 }
 
-void loop() {
+void loop()
+{
     app.run();
 }

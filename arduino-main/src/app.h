@@ -1,91 +1,28 @@
-/*
-==============================================================
-    SMART TRASH BIN CONTROLLER (FSM-based)
-    ----------------------------------------------------------
-    This module implements the core logic for a smart trash bin
-    using a Finite State Machine (FSM) design pattern.
-
-    The App class controls sensors, servos, and UART communication
-    to manage the full garbage classification and disposal workflow.
-
-==============================================================
-    STATE MACHINE OVERVIEW
-==============================================================
-The system is always in one of the following states. Each state
-defines specific actions and the conditions required to transition
-to another state.
-
-    NORMAL
-        - Default idle state.
-        - When a human is detected nearby → open lid → switch to WAITING_FOR_GARBAGE.
-
-    WAITING_FOR_GARBAGE
-        - If human leaves → close lid → return to NORMAL.
-        - If garbage detected on tray → switch to CONFIRM_GARBAGE.
-
-    CONFIRM_GARBAGE
-        - Waits for DELAY_TIME_CONFIRM_GARBAGE_SECOND (non-blocking using millis()).
-        - If garbage remains stable → close lid → trigger classification.
-        - Transition to CLASSIFYING.
-        - If garbage removed early → return to WAITING_FOR_GARBAGE.
-
-    CLASSIFYING
-        - Sends command to ESP32-CAM for image classification.
-        - If CLASSIFY_TIMEOUT_SECOND expires → re-trigger classification.
-        - When classification result received → switch to DROPPING_GARBAGE.
-
-    DROPPING_GARBAGE
-        - Opens corresponding servo gate to drop garbage into classified bin.
-        - After action completes → return to NORMAL.
-
-    ERROR
-        - Entered whenever the ESP32-CAM sends an "ERROR" command.
-        - Attempts to recover by restoring the previous state if possible.
-        - If recovery fails → resets system to NORMAL and closes lid.
-
-==============================================================
-    DESIGN NOTES
-==============================================================
-    - Finite State Machine (FSM) pattern for clean, event-driven logic.
-    - Non-blocking timing control using millis() — no delay() in main logic.
-    - Modular device abstraction (TripleServo, UltrasonicSensor, UART).
-    - Easy to extend: add new states or transitions safely.
-    - All timeouts and thresholds configurable via #define constants.
-
-==============================================================
-    USAGE NOTES
-==============================================================
-    - This class should be instantiated as a single global variable:
-          extern App app;
-
-    - The global instance acts as a wrapper for command handlers,
-      allowing lambdas in UART command registration to access
-      the main App object easily.
-
-    - Example:
-        #include "app.h"
-        App app;
-        void setup() {
-            Serial.begin(115200);
-            app.init();
-        }
-
-        void loop() {
-            app.run();
-        }
-
-==============================================================
-*/
 #ifndef APP_H
 #define APP_H
 
 #include <Arduino.h>
 #include <Servo.h>
+#include <LiquidCrystal_I2C.h>
 #include "uart.h"
 #include "utils.h"
 #include "devices/triple_servo.h"
 #include "devices/ultrasonic_sensor.h"
 
+#define GARBAGE_BIN_COUNT 4
+#define GARBAGE_BIN_LEVEL_SENSOR_OFF_SET_CM 5
+#define GARBAGE_BIN_DEPTH_CM 10
+
+#define HUMAN_DETECT_THRESHOLD_CM 30
+#define GARBAGE_ON_TRAY_DETECT_THRESHOLD_CM 15
+
+#define CLASSIFY_TIMEOUT_MS 15000UL
+#define DELAY_TIME_CONFIRM_GARBAGE_MS 2000UL
+
+#define LCD_I2C_ADDRESS 0x20
+#define LCD_ROWS 16
+#define LCD_COLUMNS 2
+#define LCD_RENDER_INTEVAL_MS 1000UL
 
 /*
 ------------------------------------------------
@@ -93,17 +30,10 @@ to another state.
 ------------------------------------------------
 */
 
-#define GARBAGE_BIN_COUNT 4
-#define HUMAN_DETECT_THRESHOLD_CM 30
-#define GARBAGE_ON_TRAY_DETECT_THRESHOLD_CM 15
-#define GARBAGE_LEVEL_SENSOR_OFF_SET_CM 5
-#define BIN_TOTAL_DEPTH_CM 10
-#define CLASSIFY_TIMEOUT_SECOND 15
-#define DELAY_TIME_CONFIRM_GARBAGE_SECOND 2
-
 enum AppState
 {
     NORMAL,
+    GARBAGE_FULL,
     WAITING_FOR_GARBAGE,
     CONFIRM_GARBAGE,
     CLASSIFYING,
@@ -111,52 +41,69 @@ enum AppState
     ERROR
 };
 
+static String AppStateName[] = {
+    "NORMAL",
+    "GARBAGE_FULL",
+    "WAITING_FOR_GARBAGE",
+    "CONFIRM_GARBAGE",
+    "CLASSIFYING",
+    "DROPPING_GARBAGE",
+    "ERROR"
+};
+
 class App
 {
 private:
-    AppState current_state = NORMAL;
-    AppState previous_state = NORMAL;
+    AppState current_state;
+    AppState previous_state;
 
-    // time mili second
-    unsigned long start_classify_at = 0;
-    unsigned long start_confirm_garbage_at = 0;
+    // timestamp millisecond
+    unsigned long start_classify_at;
+    unsigned long start_confirm_garbage_at;
 
     String error_message;
 
-    int binIdToDrop = -1; // after classify, app.current_state = DROPPING_GARBAGE
+    int classify_result; // bin_id
 
     UART uart;
 
-    // devices
+    // devices & sensors
+    LiquidCrystal_I2C lcd;
     TripleServo tripleServo;
     Servo lidServo;
     UltraSonicSensor garbageDetectSensor, humanDetectSensor;
     UltraSonicSensor garbageBinLevelSensor[GARBAGE_BIN_COUNT];
 
-    void initCommandHandlers();
-
 public:
+    App();
     void init();
+    void run();
+
+    void addCommandHandler(String command, void (*handler)(String tokens[], int n));
 
     bool isGarbageOnTray();
-    bool isHumanNearBy();
-    float getBinLevel(int binId); // fill percentage
+    bool isHumanNearby();
+    float getGarbageBinLevel(int bin_id); // fill percentage %
 
     void setState(AppState state);
-    void setErrorMessage(String s);
+    void setErrorMessage(String message);
 
     void closeLid();
     void openLid();
 
-    void setDropTarget(int binId);
-    void dropGarbageAt(int binId);
+    void setClassifyResult(int bin_id);
+    void dropGarbage();
 
-    void run();
+    // send classify request to ESP32-CAM
+    static void requestClassify();
+
+    // send garbage bin level to ESP32-CAM
+    static void reportGarbageBinLevel(float b1, float b2, float b3, float b4);
 };
 
 // GLOBAL VARIABLE FOR APP
 // use like wrapper for CommandHandler
-extern App app;
+App app;
 
 /*
 ------------------------------------------------
@@ -164,48 +111,246 @@ extern App app;
 ------------------------------------------------
 */
 
-void App::init()
+App::App() : current_state(NORMAL),
+             previous_state(NORMAL),
+             start_classify_at(0),
+             start_confirm_garbage_at(0),
+             error_message(""),
+             classify_result(-1),
+             lcd(LCD_I2C_ADDRESS, LCD_COLUMNS, LCD_ROWS)
 {
-    this->uart.init();
-    this->initCommandHandlers();
+}
 
-    // devices pin
-    this->garbageBinLevelSensor[0].attach(2, 3);
-    this->garbageBinLevelSensor[1].attach(4, 5);
-    this->garbageBinLevelSensor[2].attach(6, 7);
-    this->garbageBinLevelSensor[3].attach(8, 9);
-
-    this->lidServo.attach(10);
-    this->humanDetectSensor.attach(11, 12);
+void App::init(){
+    // devices & sensors
+    this->garbageDetectSensor.attach(2, 3);
+    this->humanDetectSensor.attach(4, 5);
+    this->garbageBinLevelSensor[0].attach(6, 7);
+    this->garbageBinLevelSensor[1].attach(8, 9);
+    this->garbageBinLevelSensor[2].attach(10, 11);
+    this->garbageBinLevelSensor[3].attach(12, 13);
 
     this->tripleServo.attach(A0, A1, A2);
-    this->garbageDetectSensor.attach(A3, A4);
-
-    // reset servo
+    this->lidServo.attach(A3);
     this->lidServo.write(0);
+
+    this->lcd.init();
+    this->lcd.backlight();
+
+    // uart & command handlers
+    this->uart.init();
+
+    this->uart.addCommandHandler(
+        "GET_GARBAGE_BIN_LEVEL",
+        [](String tokens[], int n)
+        {
+            App::reportGarbageBinLevel(
+                app.getGarbageBinLevel(0),
+                app.getGarbageBinLevel(1),
+                app.getGarbageBinLevel(2),
+                app.getGarbageBinLevel(3)
+            );
+        });
+
+    this->uart.addCommandHandler(
+        "CLASS",
+        [](String tokens[], int n)
+        {
+            if ((app.current_state != CLASSIFYING) || (n == 1))
+                return;
+            app.setClassifyResult(tokens[1].toInt());
+        });
+
+    this->uart.addCommandHandler(
+        "ERROR",
+        [](String tokens[], int n)
+        {
+            String message = "";
+            for (int i = 1; i < n; i++)
+            {
+                message += tokens[i] + " ";
+            }
+            app.setErrorMessage(message);
+        });
+}
+
+void App::run()
+{
+    this->uart.run();
+
+    switch (this->current_state)
+    {
+        case NORMAL:
+        {
+            // lcd render garbage bin level
+            static float binLevel[GARBAGE_BIN_COUNT] = {0, 0, 0, 0};
+            static unsigned long last_render = 0;
+            static int next_bin_id = 0;
+            unsigned long now = millis();
+
+            if ((now - last_render) >= LCD_RENDER_INTEVAL_MS){
+                binLevel[next_bin_id] = this->getGarbageBinLevel(next_bin_id);
+                if(binLevel[next_bin_id] >= 90){
+
+                    this->lcd.clear();
+                    this->lcd.setCursor(0, 0);
+                    this->lcd.print("GARBAGE FULL");
+
+                    this->setState(GARBAGE_FULL);
+
+                    last_render = now;
+                    next_bin_id = (next_bin_id+1)%GARBAGE_BIN_COUNT;
+                    break;
+                }
+
+                lcd.clear();
+                lcd.setCursor(0, 0);
+                lcd.print("Garbage bin ");
+                lcd.print(next_bin_id);
+                lcd.setCursor(0, 1);
+                lcd.print(binLevel[next_bin_id]);
+                lcd.print(" %");
+
+                last_render = now;
+                next_bin_id = (next_bin_id+1)%GARBAGE_BIN_COUNT;
+            }
+
+            // check if human near -> change state to waiting for garbage
+            if (this->isHumanNearby())
+            {
+                this->openLid();
+                this->setState(WAITING_FOR_GARBAGE);
+
+                this->lcd.clear();
+                this->lcd.setCursor(0, 0);
+                this->lcd.print("Vui long bo rac ");
+                this->lcd.setCursor(0, 1);
+                this->lcd.print("vao khay");
+            }
+
+            break;
+        }
+        
+        case GARBAGE_FULL:
+        {   
+            static unsigned long last_recheck = 0;
+            unsigned long now = millis();
+
+            // recheck after 2s
+            if ((now - last_recheck) < 2000UL)
+                break;
+            
+            if ((this->getGarbageBinLevel(0) <= 90) ||
+                (this->getGarbageBinLevel(1) <= 90) ||
+                (this->getGarbageBinLevel(2) <= 90) ||
+                (this->getGarbageBinLevel(3) <= 90)
+            ){
+                this->setState(NORMAL);
+            }
+
+            last_recheck = now;
+            break;
+        }
+
+        case WAITING_FOR_GARBAGE:
+        {
+            if (this->isGarbageOnTray())
+            {
+                this->setState(CONFIRM_GARBAGE);
+            }
+            else if (!this->isHumanNearby())
+            {
+                this->setState(NORMAL);
+                this->closeLid();
+            }
+            break;
+        }
+
+        case CONFIRM_GARBAGE:
+        {
+            if (!this->isGarbageOnTray())
+            {
+                this->setState(WAITING_FOR_GARBAGE);
+                break;
+            }
+            unsigned long now = millis();
+            if ((now - this->start_confirm_garbage_at) >= (DELAY_TIME_CONFIRM_GARBAGE_MS))
+            {
+                this->closeLid();
+                this->setState(CLASSIFYING);
+                App::requestClassify();
+
+                this->lcd.clear();
+                this->lcd.setCursor(0, 0);
+                this->lcd.print("Dang phan loai");
+                this->lcd.setCursor(0, 1);
+                this->lcd.print("rac...");
+
+            }
+            break;
+        }
+
+        case CLASSIFYING:
+        {
+            unsigned long now = millis();
+            if ((now - this->start_classify_at) >= (CLASSIFY_TIMEOUT_MS))
+            {
+                // retry classify
+                this->start_classify_at = millis();
+                App::requestClassify();
+            }
+            break;
+        }
+
+        case DROPPING_GARBAGE:
+        {
+            this->lcd.clear();
+            this->lcd.setCursor(0, 0);
+            this->lcd.print("Phan loai: ");
+            this->lcd.print(this->classify_result);
+            this->dropGarbage();
+            break;
+        }
+
+        case ERROR:
+        {
+            Serial.println("Something wrong: " + this->error_message);
+            if (this->previous_state != ERROR)
+            {
+                this->setState(this->previous_state);
+                if (this->previous_state == CLASSIFYING)
+                {
+                    App::requestClassify();
+                }
+            }
+            else
+            {
+                this->setState(NORMAL);
+                this->closeLid();
+            }
+            break;
+        }
+    } // end switch(this->current_state)
+
+    delay(10);
+}
+
+void App::addCommandHandler(String command, void (*handler)(String tokens[], int n))
+{
+    this->uart.addCommandHandler(command, handler);
 }
 
 bool App::isGarbageOnTray()
 {
-    float d = this->garbageDetectSensor.measureDistanceCM();
-
-    // DEBUG
-    Serial.print("Garbage on tray sensor cm: "); Serial.println(d);
-
-    return (d < GARBAGE_ON_TRAY_DETECT_THRESHOLD_CM);
+    return this->garbageDetectSensor.measureDistanceCM() < GARBAGE_ON_TRAY_DETECT_THRESHOLD_CM;
 }
 
-bool App::isHumanNearBy()
+bool App::isHumanNearby()
 {
-    float d = this->humanDetectSensor.measureDistanceCM();
-
-    // DEBUG
-    Serial.print("Human detect sensor cm: "); Serial.println(d);
-
-    return (d < HUMAN_DETECT_THRESHOLD_CM);
+    return this->humanDetectSensor.measureDistanceCM() < HUMAN_DETECT_THRESHOLD_CM;
 }
 
-float App::getBinLevel(int binId)
+float App::getGarbageBinLevel(int binId)
 {
     if (!(binId >= 0 && binId < GARBAGE_BIN_COUNT))
     {
@@ -213,28 +358,30 @@ float App::getBinLevel(int binId)
     }
 
     float d = this->garbageBinLevelSensor[binId].measureDistanceCM();
-    float garbage_fill_height = (BIN_TOTAL_DEPTH_CM + GARBAGE_LEVEL_SENSOR_OFF_SET_CM) - d;
+
+    float garbage_fill_height = (GARBAGE_BIN_DEPTH_CM + GARBAGE_BIN_LEVEL_SENSOR_OFF_SET_CM) - d;
 
     if (garbage_fill_height < 0)
         garbage_fill_height = 0;
-    if (garbage_fill_height > BIN_TOTAL_DEPTH_CM)
-        garbage_fill_height = BIN_TOTAL_DEPTH_CM;
 
-    float fill_percentage =  (garbage_fill_height / BIN_TOTAL_DEPTH_CM) * 100;
+    if (garbage_fill_height > GARBAGE_BIN_DEPTH_CM)
+        garbage_fill_height = GARBAGE_BIN_DEPTH_CM;
 
-    // DEBUG
-    Serial.println("Bin " + String(binId) + " level: " + String(d) + " cm ~ " + String(fill_percentage) + "%");
+    float fill_percentage = (garbage_fill_height / GARBAGE_BIN_DEPTH_CM) * 100;
     
     return fill_percentage;
 }
 
 void App::setState(AppState state)
 {
-    if (state == CONFIRM_GARBAGE)
+    if (state == this->current_state)
+    {
+        return;
+    }
+    else if (state == CONFIRM_GARBAGE)
     {
         this->start_confirm_garbage_at = millis();
     }
-
     else if (state == CLASSIFYING)
     {
         this->start_classify_at = millis();
@@ -244,16 +391,15 @@ void App::setState(AppState state)
     this->current_state = state;
 
     // DEBUG
-    String enumName[] = {"NORMAL", "WAITING_FOR_GARBAGE", "CONFIRM_GARBAGE", "CLASSIFYING", "DROPPING_GARBAGE", "ERROR"};
-    Serial.println("=============================");
+    Serial.println("===== DEBUG =====");
     Serial.println("App state change:");
-    Serial.println("Current State: " + enumName[this->current_state]);
-    Serial.println("Previous State: " + enumName[this->previous_state]);
+    Serial.println("Current State: " + AppStateName[this->current_state]);
+    Serial.println("Previous State: " + AppStateName[this->previous_state]);
 }
 
-void App::setErrorMessage(String s)
+void App::setErrorMessage(String message)
 {
-    this->error_message = s;
+    this->error_message = message;
     this->setState(ERROR);
 }
 
@@ -285,181 +431,37 @@ void App::openLid()
     }
 }
 
-void App::setDropTarget(int binId)
+void App::setClassifyResult(int bin_id)
 {
-    if (!(binId >= 0 && binId < GARBAGE_BIN_COUNT))
+    if (!(bin_id >= 0 && bin_id < GARBAGE_BIN_COUNT))
     {
         return;
     }
-    this->binIdToDrop = binId;
+    this->classify_result = bin_id;
     this->setState(DROPPING_GARBAGE);
 }
 
-void App::dropGarbageAt(int binId)
+void App::dropGarbage()
 {
-    if (!(binId >= 0 && binId < GARBAGE_BIN_COUNT))
-    {
+    if (!(this->classify_result >= 0 && this->classify_result < GARBAGE_BIN_COUNT))
         return;
-    }
-    int angle = (binId * 90) + 45;
+    int angle = (this->classify_result * 90) + 45;
     this->tripleServo.dropAt(angle);
     this->setState(NORMAL);
+    this->classify_result = -1;
 }
 
-void App::initCommandHandlers()
-{
+void App::requestClassify(){
+    Serial.println("CLASSIFY --flash");
+}
 
-    /*
-    ----------------------------------------------
-            COMMAND: GET_GARBAGE_BIN_LEVEL
-    ----------------------------------------------
-     */
-    this->uart.addCommandHandler(
-        "GET_GARBAGE_BIN_LEVEL",
-        [](String tokens[], int n)
-        {
-            float bin_levels[GARBAGE_BIN_COUNT];
-            for (int i = 0; i < GARBAGE_BIN_COUNT; i++)
-            {
-                bin_levels[i] = app.getBinLevel(i);
-            }
-            Serial.println(
-                "GARBAGE_BIN_LEVEL " + String(bin_levels[0]) + " " + String(bin_levels[1]) + " " + String(bin_levels[2]) + " " + String(bin_levels[3]));
-        });
-
-    /*
-    ----------------------------------------------
-            COMMAND: CLASS
-    ----------------------------------------------
-     */
-    this->uart.addCommandHandler(
-        "CLASS",
-        [](String tokens[], int n)
-        {
-            if (app.current_state != CLASSIFYING)
-                return;
-            if (n == 1)
-                return;
-            int classify_result = tokens[1].toInt();
-            app.setDropTarget(classify_result);
-        });
-
-    /*
-    ----------------------------------------------
-            COMMAND: ERROR
-    ----------------------------------------------
-     */
-    this->uart.addCommandHandler(
-        "ERROR",
-        [](String tokens[], int n)
-        {
-            String message = "";
-            for (int i = 1; i < n; i++)
-            {
-                message += tokens[i] + " ";
-            }
-            app.setErrorMessage(message);
-        }
-
+void App::reportGarbageBinLevel(float b1, float b2, float b3, float b4){
+    Serial.println(
+        "GARBAGE_BIN_LEVEL " + String(b1)
+        + " " + String(b2)
+        + " " + String(b3)
+        + " " + String(b4) 
     );
-}
-
-void App::run()
-{
-
-    this->uart.run();
-
-    switch (this->current_state)
-    {
-    case NORMAL:
-    {
-        if (this->isHumanNearBy())
-        {
-            this->openLid();
-            this->setState(WAITING_FOR_GARBAGE);
-        }
-        break;
-    }
-
-    case WAITING_FOR_GARBAGE:
-    {
-        if (this->isGarbageOnTray())
-        {
-            this->setState(CONFIRM_GARBAGE);
-        }
-        else if (!this->isHumanNearBy())
-        {
-            this->setState(NORMAL);
-            this->closeLid();
-        }
-        break;
-    }
-
-    case CONFIRM_GARBAGE:
-    {
-        if (!this->isGarbageOnTray())
-        {
-            this->setState(WAITING_FOR_GARBAGE);
-            break;
-        }
-
-        unsigned long now = millis();
-        if ((now - this->start_confirm_garbage_at) >= (DELAY_TIME_CONFIRM_GARBAGE_SECOND * 1000UL))
-        {
-            this->closeLid();
-            this->setState(CLASSIFYING);
-            Serial.println("CLASSIFY --flash");
-        }
-        break;
-    }
-
-    case CLASSIFYING:
-    {
-        unsigned long now = millis();
-        if ((now - this->start_classify_at) >= (CLASSIFY_TIMEOUT_SECOND * 1000UL))
-        {
-            // retry classify
-            this->start_classify_at = millis();
-            Serial.println("CLASSIFY --flash");
-        }
-        break;
-    }
-
-    case DROPPING_GARBAGE:
-    {
-        this->dropGarbageAt(this->binIdToDrop);
-        break;
-    }
-
-    case ERROR:
-    {
-        // handle error
-
-        // DEBUG
-        Serial.println("Something wrong: " + this->error_message);
-
-        // switch to previous state
-        if (this->previous_state != ERROR)
-        {
-            this->setState(this->previous_state);
-            // retry classify
-            if (this->previous_state == CLASSIFYING)
-            {
-                Serial.println("CLASSIFY --flash");
-            }
-        }
-        else
-        {
-            // reset
-            this->setState(NORMAL);
-            this->closeLid();
-        }
-        break;
-    }
-
-    } // end switch
-
-    delay(10);
 }
 
 #endif
