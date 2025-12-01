@@ -1,20 +1,59 @@
-#include "config.h"
-#include "app.h"
+#define FIX_NVS 0
 
-App app;
-void setup()
-{
-    Serial.begin(115200);
-    app.init(
-        WIFI_SSID,
-        WIFI_PASSWORD,
-        SERVER_URL,
-        BLYNK_AUTH_TOKEN,
-        BLYNK_UPDATE_INTERVAL_MS
-    );
-}
+#if FIX_NVS==0
+    #include "blynk_config.h"
+    #include "app.h"
+    App app;
+    void setup()
+    {
+        Serial.begin(115200);
+        app.init(
+            BLYNK_AUTH_TOKEN,
+            BLYNK_UPDATE_INTERVAL_MS
+        );
+    }
 
-void loop()
-{
-    app.run();
-}
+    void loop()
+    {
+        String s1, s2, s3;
+        AppConfig::readConfig(s1, s2, s3);
+        Serial.printf("Config:\n\t'%s'\n\t'%s'\n\t'%s'\n\n", s1, s2, s3);
+        app.run();
+    }
+#else
+    #include <Arduino.h>
+    #include <Preferences.h>
+    #include <nvs_flash.h>
+
+    Preferences preferences;
+
+    void initNVS() {
+        esp_err_t err = nvs_flash_init();
+        if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+            Serial.println("NVS bị lỗi hoặc hỏng. Đang xóa Flash...");
+            ESP_ERROR_CHECK(nvs_flash_erase());
+            err = nvs_flash_init();
+            Serial.println("Đã xóa và khởi tạo lại NVS!");
+        }
+        ESP_ERROR_CHECK(err);
+    }
+
+    void setup() {
+        Serial.begin(115200);
+        delay(1000);
+        initNVS();
+        Preferences pref;
+        pref.begin("greenbox", false);
+        pref.putString("check-memory", "ok");
+        pref.end();
+
+        pref.begin("greenbox", false);
+        Serial.println("fix nvs: "+ pref.getString("check-memory"));
+        pref.end();
+        
+    }
+
+    void loop() {}
+#endif
+
+

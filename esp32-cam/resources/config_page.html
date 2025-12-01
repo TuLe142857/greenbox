@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GreenBox Setup</title>
+    <style>
+        :root {
+            --primary: #4CAF50;
+            --primary-dark: #388E3C;
+            --bg: #f4f7f6;
+            --card-bg: #ffffff;
+            --text: #333;
+            --text-light: #666;
+            --border: #ddd;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .container {
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 400px;
+        }
+        h1 {
+            color: var(--primary);
+            text-align: center;
+            margin: 0 0 5px 0;
+            font-size: 28px;
+        }
+        .subtitle {
+            text-align: center;
+            color: var(--text-light);
+            margin: 0 0 25px 0;
+            font-size: 14px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            font-size: 14px;
+        }
+        .input-row {
+            display: flex;
+            gap: 10px;
+        }
+        input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 16px;
+            box-sizing: border-box;
+            outline: none;
+        }
+        input:focus {
+            border-color: var(--primary);
+        }
+        /* Buttons */
+        .btn-icon {
+            padding: 0 12px;
+            background: #eee;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .btn-submit {
+            width: 100%;
+            padding: 12px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: background 0.3s;
+        }
+        .btn-submit:hover {
+            background: var(--primary-dark);
+        }
+        /* Wifi List */
+        #wifi-list {
+            list-style: none;
+            padding: 0;
+            margin: 10px 0 0 0;
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            display: none; /* Hidden by default */
+        }
+        #wifi-list li {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            justify-content: space-between;
+        }
+        #wifi-list li:last-child {
+            border-bottom: none;
+        }
+        #wifi-list li:hover {
+            background-color: #f0f9f0;
+        }
+        /* Advanced Toggle */
+        .advanced-toggle {
+            text-align: center;
+            margin: 15px 0;
+            font-size: 14px;
+        }
+        .advanced-toggle a {
+            color: var(--primary);
+            text-decoration: none;
+            cursor: pointer;
+        }
+        /* Footer */
+        .footer-note {
+            margin-top: 25px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+            font-size: 12px;
+            color: #888;
+            text-align: center;
+            line-height: 1.4;
+        }
+        /* Utilities */
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>GreenBox</h1>
+    <p class="subtitle">Thùng rác thông minh tự phân loại rác</p>
+
+    <form action="/submit" method="POST">
+        <div class="form-group">
+            <label>Tên Wifi (SSID)</label>
+            <div class="input-row">
+                <input type="text" id="ssid" name="wifi_ssid" placeholder="Nhập hoặc Scan..." required>
+                <button type="button" class="btn-icon" onclick="scanWifi()" title="Quét Wifi">🔍</button>
+            </div>
+            <ul id="wifi-list"></ul>
+        </div>
+
+        <div class="form-group">
+            <label>Mật khẩu Wifi</label>
+            <div class="input-row">
+                <input type="password" id="password" name="wifi_password" placeholder="Mật khẩu...">
+                <button type="button" class="btn-icon" onclick="togglePass()" title="Hiện/Ẩn">👁️</button>
+            </div>
+        </div>
+
+        <div id="advanced-section" class="form-group hidden">
+            <label>Server URL</label>
+            <input type="text" id="server_url" name="server_url" placeholder="http://192.168.1.100:5000">
+        </div>
+
+        <div id="toggle-container" class="advanced-toggle hidden">
+            <a onclick="showAdvanced()">⚙️ Cấu hình nâng cao (Server URL)</a>
+        </div>
+
+        <button type="submit" class="btn-submit">Lưu Cấu Hình</button>
+    </form>
+
+    <div class="footer-note">
+        * Lưu ý: Nếu muốn cài đặt lại Wifi sau này, hãy nhấn giữ nút <b>RESET</b> trên thân thùng rác.
+    </div>
+</div>
+
+<script>
+    // 1. Logic xử lý Server URL khi load trang
+    fetch('/default-config')
+        .then(response => response.text())
+        .then(url => {
+            const serverInput = document.getElementById('server_url');
+            const section = document.getElementById('advanced-section');
+            const toggle = document.getElementById('toggle-container');
+
+            if (url && url.trim().length > 0) {
+                // Đã có config -> Ẩn input, hiện nút toggle
+                serverInput.value = url;
+                section.classList.add('hidden');
+                toggle.classList.remove('hidden');
+                serverInput.required = false;
+            } else {
+                // Chưa có config -> Hiện input, bắt buộc nhập
+                section.classList.remove('hidden');
+                toggle.classList.add('hidden');
+                serverInput.required = true;
+            }
+        })
+        .catch(err => {
+            // Lỗi mạng hoặc server -> Hiện mặc định cho an toàn
+            document.getElementById('advanced-section').classList.remove('hidden');
+        });
+
+    function showAdvanced() {
+        document.getElementById('advanced-section').classList.remove('hidden');
+        document.getElementById('toggle-container').classList.add('hidden');
+        document.getElementById('server_url').focus();
+    }
+
+    // 2. Logic Quét Wifi
+    function scanWifi() {
+        const list = document.getElementById('wifi-list');
+        list.style.display = 'block';
+        list.innerHTML = '<li style="justify-content:center; color:#666">Đang quét... ⏳</li>';
+
+        fetch('/scan-wifi')
+            .then(response => response.json())
+            .then(data => {
+                list.innerHTML = '';
+                if (data.length === 0) {
+                    list.innerHTML = '<li style="justify-content:center">Không tìm thấy Wifi</li>';
+                    return;
+                }
+                
+                // Sắp xếp theo độ mạnh tín hiệu (RSSI)
+                data.sort((a, b) => b.rssi - a.rssi);
+
+                data.forEach(net => {
+                    const li = document.createElement('li');
+                    // Tính icon sóng dựa trên RSSI
+                    let signal = 'weak';
+                    if (net.rssi > -60) signal = 'strong';
+                    else if (net.rssi > -70) signal = 'med';
+
+                    // Khóa nếu có pass
+                    const lockIcon = net.encryption === 'OPEN' ? '' : '🔒';
+
+                    li.innerHTML = `
+                        <span>${lockIcon} <b>${net.ssid}</b></span>
+                        <small>${net.rssi} dBm</small>
+                    `;
+                    li.onclick = () => {
+                        document.getElementById('ssid').value = net.ssid;
+                        document.getElementById('password').focus();
+                        list.style.display = 'none';
+                    };
+                    list.appendChild(li);
+                });
+            })
+            .catch(() => {
+                list.innerHTML = '<li style="justify-content:center; color:red">Lỗi khi quét!</li>';
+            });
+    }
+
+    // 3. Logic ẩn hiện pass
+    function togglePass() {
+        const input = document.getElementById('password');
+        input.type = input.type === 'password' ? 'text' : 'password';
+    }
+</script>
+
+</body>
+</html>

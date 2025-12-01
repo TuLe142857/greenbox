@@ -1,9 +1,5 @@
-#ifndef APP_CONFIG_H
-#define APP_CONFIG_H
-
-#define WIFI_SSID ""
-#define WIFI_PASSWORD ""
-#define SERVER_URL ""
+#ifndef BLYNK_SECRET_CONFIG_H
+#define BLYNK_SECRET_CONFIG_H
 
 #define BLYNK_TEMPLATE_ID ""
 #define BLYNK_TEMPLATE_NAME ""

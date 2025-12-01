@@ -39,15 +39,9 @@ class Camera
 {
 private:
     camera_fb_t *fb;
-
 public:
     Camera() {};
-
-    bool init();
-
-    void setFrameSize(framesize_t fs);
-    void setQuality(int quality);
-
+    bool init(framesize_t frame_size=FRAMESIZE_240X240);
     camera_fb_t *capture(bool flash_on = false);
 };
 
@@ -57,7 +51,7 @@ public:
 -------------------------------------------------
 */
 
-bool Camera::init()
+bool Camera::init(framesize_t frame_size)
 {
     pinMode(LAMP_PIN, OUTPUT);
     digitalWrite(LAMP_PIN, LOW);
@@ -96,20 +90,6 @@ bool Camera::init()
     config.grab_mode = CAMERA_GRAB_WHEN_EMPTY;
 
     return esp_camera_init(&config) == ESP_OK;
-}
-
-void Camera::setFrameSize(framesize_t fs)
-{
-    sensor_t *camera_sensor = esp_camera_sensor_get();
-    camera_sensor->set_framesize(camera_sensor, fs);
-}
-
-void Camera::setQuality(int quality)
-{
-    if (!(quality >= 0 && quality < 64))
-        return;
-    sensor_t *camera_sensor = esp_camera_sensor_get();
-    camera_sensor->set_quality(camera_sensor, quality);
 }
 
 camera_fb_t *Camera::capture(bool flash_on)
