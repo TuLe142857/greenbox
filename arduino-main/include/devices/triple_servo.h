@@ -69,7 +69,7 @@ void TripleServo::dropAt(int angle, int delay_t){
 
     int sv0_angle = (angle <= 180) ? (angle) : (180);
     int sv1_angle = (angle <= 180) ? (0) : (angle-180);
-    int sv2_angle = 135;
+    int sv2_angle = 45;
 
     // drop
     this->rotate(0, sv0_angle, delay_t);

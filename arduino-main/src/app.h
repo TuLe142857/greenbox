@@ -19,7 +19,7 @@
 #define CLASSIFY_TIMEOUT_MS 15000UL
 #define DELAY_TIME_CONFIRM_GARBAGE_MS 2000UL
 
-#define LCD_I2C_ADDRESS 0x20
+#define LCD_I2C_ADDRESS 0x27
 #define LCD_ROWS 16
 #define LCD_COLUMNS 2
 #define LCD_RENDER_INTEVAL_MS 1000UL
@@ -32,6 +32,7 @@
 
 enum AppState
 {
+    WAITING_FOR_ESP, // wait for config/connect wifi/..
     NORMAL,
     GARBAGE_FULL,
     WAITING_FOR_GARBAGE,
@@ -42,6 +43,7 @@ enum AppState
 };
 
 static String AppStateName[] = {
+    "WAITING_FOR_ESP",
     "NORMAL",
     "GARBAGE_FULL",
     "WAITING_FOR_GARBAGE",
@@ -60,6 +62,7 @@ private:
     // timestamp millisecond
     unsigned long start_classify_at;
     unsigned long start_confirm_garbage_at;
+    unsigned long last_ping_at;
 
     String error_message;
 
@@ -91,6 +94,9 @@ public:
     void closeLid();
     void openLid();
 
+    //lcd
+    void render(const String line0="", const String line1="");
+
     void setClassifyResult(int bin_id);
     void dropGarbage();
 
@@ -111,10 +117,11 @@ App app;
 ------------------------------------------------
 */
 
-App::App() : current_state(NORMAL),
-             previous_state(NORMAL),
+App::App() : current_state(WAITING_FOR_ESP),
+             previous_state(WAITING_FOR_ESP),
              start_classify_at(0),
              start_confirm_garbage_at(0),
+             last_ping_at(0),
              error_message(""),
              classify_result(-1),
              lcd(LCD_I2C_ADDRESS, LCD_COLUMNS, LCD_ROWS)
@@ -139,6 +146,45 @@ void App::init(){
 
     // uart & command handlers
     this->uart.init();
+
+    this->uart.addCommandHandler(
+        "ESP_STATUS",
+        [](String tokens[], int n)
+        {
+            if(n == 2){
+                int status_code = tokens[1].toInt();
+                Serial.println(status_code);
+                switch (status_code){
+                    //ready
+                    case 0:{
+                        app.setState(NORMAL);
+                        break;
+                    }
+
+                    // on config mode
+                    case 1:{
+                        app.setState(WAITING_FOR_ESP);
+                        app.render("PLEASE", "CONFIG WIFI");
+                        break;
+                    }
+
+                    // try connecting wifi
+                    case 2:{
+                        app.setState(WAITING_FOR_ESP);
+                        app.render("CONNECTING WIFI");
+                        break;
+                    }
+
+                    //wifi disconnected
+                    case 3:{
+                        app.setState(WAITING_FOR_ESP);
+                        app.render("WIFI", "DISCONNECTED");
+                        break;
+                    }
+                }
+            }
+        }
+    );
 
     this->uart.addCommandHandler(
         "GET_GARBAGE_BIN_LEVEL",
@@ -172,6 +218,10 @@ void App::init(){
             }
             app.setErrorMessage(message);
         });
+
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Hello Word");
 }
 
 void App::run()
@@ -180,6 +230,15 @@ void App::run()
 
     switch (this->current_state)
     {
+        case WAITING_FOR_ESP:
+        {
+            unsigned long now = millis();
+            if((now - app.last_ping_at) > 1000){
+                Serial.println("PING");
+                app.last_ping_at = now;
+            }
+            break;
+        }
         case NORMAL:
         {
             // lcd render garbage bin level
@@ -333,6 +392,14 @@ void App::run()
     } // end switch(this->current_state)
 
     delay(10);
+}
+
+void App::render(const String line0, const String line1){
+    this->lcd.clear();
+    this->lcd.setCursor(0, 0);
+    this->lcd.print(line0);
+    this->lcd.setCursor(0, 1);
+    this->lcd.print(line1);
 }
 
 void App::addCommandHandler(String command, void (*handler)(String tokens[], int n))
