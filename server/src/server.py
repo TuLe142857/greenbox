@@ -1,6 +1,6 @@
 from flask import Flask, request, Response
-import cv2
-import numpy as np
+# import cv2
+# import numpy as np
 import random
 from datetime import  datetime
 app = Flask(__name__)
@@ -19,19 +19,19 @@ def root():
         <h3>Phân loại rác thông minh</h3>
         <p><strong>Ảnh mới nhất nhận từ ESP32-CAM:</strong></p>
         <p>Thời gian: {lastest_time}</p>
-        <img src="/latest" alt="Latest Image" />
+        # <img src="/latest" alt="Latest Image" />
     </body>
     </html>
     """
 
-@app.route("/latest")
-def latest():
-    global latest_img
-    if latest_img is None:
-        return "No image yet", 404
-    # encode to JPEG
-    _, buffer = cv2.imencode('.jpg', latest_img)
-    return Response(buffer.tobytes(), mimetype='image/jpeg')
+# @app.route("/latest")
+# def latest():
+#     global latest_img
+#     if latest_img is None:
+#         return "No image yet", 404
+#     # encode to JPEG
+#     _, buffer = cv2.imencode('.jpg', latest_img)
+#     return Response(buffer.tobytes(), mimetype='image/jpeg')
 
 
 WASTE_TYPES = ['0', '1', '2', '3']
@@ -41,9 +41,9 @@ def post_img():
     if len(data) == 0:
         return "No data received", 400
 
-    global latest_img
+    # global latest_img
     global lastest_time
-    latest_img = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
+    # latest_img = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
     lastest_time = datetime.now()
     return random.choice(WASTE_TYPES),  200
 
