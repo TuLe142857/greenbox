@@ -1,12 +1,19 @@
-#define FIX_NVS 0
+#define PRODUCTION
+// #define DEBUG
 
-#if FIX_NVS==0
+#ifdef PRODUCTION
     #include "blynk_config.h"
     #include "app.h"
     App app;
     void setup()
     {
         Serial.begin(115200);
+        // AppConfig::clearConfig();
+        // AppConfig::writeConfig(
+        //     "TuLe456",
+        //     "tule1933",
+        //     "server_url";
+        // );
         app.init(
             BLYNK_AUTH_TOKEN,
             BLYNK_UPDATE_INTERVAL_MS
@@ -15,12 +22,9 @@
 
     void loop()
     {
-        String s1, s2, s3;
-        AppConfig::readConfig(s1, s2, s3);
-        Serial.printf("Config:\n\t'%s'\n\t'%s'\n\t'%s'\n\n", s1, s2, s3);
         app.run();
     }
-#else
+#elif defined(DEBUG)
     #include <Arduino.h>
     #include <Preferences.h>
     #include <nvs_flash.h>
@@ -50,7 +54,6 @@
         pref.begin("greenbox", false);
         Serial.println("fix nvs: "+ pref.getString("check-memory"));
         pref.end();
-        
     }
 
     void loop() {}

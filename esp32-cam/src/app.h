@@ -139,15 +139,9 @@ void App::run()
         }
     }
 
-    // check reset button(press for 0.5 seconds)
+    // check reset button
     if(digitalRead(this->resetButtonPin)==LOW){
-        digitalWrite(LED_PIN,LED_OFF);
-        delay(500);
-        digitalWrite(LED_PIN, LED_ON);
-        if(digitalRead(this->resetButtonPin)==LOW){
-            AppConfig::clearConfig();
-            this->setState(AppState::CONFIG_MODE);
-        }
+        AppConfig::clearConfig();
     }
 
     this->uart.run();
@@ -180,27 +174,7 @@ void App::initCommandHandlers()
             camera_fb_t *fb = this->camera.capture(flash_on);
             String response, error;
             if (this->sendImageToServer(fb, response, error)){
-                Serial.println("CLASS " + response);// void connectWifi(const char *ssid, const char *password, int timeout_second)
-// {
-
-//     if (password == nullptr || strlen(password) == 0)
-//     {
-//         WiFi.begin(ssid);
-//     }
-//     else
-//     {
-//         WiFi.begin(ssid, password);
-//     }
-
-//     int count = 0;
-//     while (WiFi.status() != WL_CONNECTED && count != timeout_second)
-//     {
-//         count++;
-//         digitalWrite(LED_PIN, count%2);
-//         delay(500);
-//     }
-//     digitalWrite(LED_PIN, WiFi.status() == WL_CONNECTED ? LED_ON : LED_OFF);
-// }
+                Serial.println("CLASS " + response);
                 
                 // request get bin level after classify
                 Serial.println("GET_GARBAGE_BIN_LEVEL");
