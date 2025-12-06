@@ -8,12 +8,16 @@ class UltraSonicSensor{
 private:
     int trigger_pin;
     int echo_pin;
+    float __measureDistanceCM__();
 public:
     UltraSonicSensor(){}
 
     void attach(int trigger_pin, int echo_pin);
+    
 
-    float measureDistanceCM();
+    // Measures distance in centimeters by averaging multiple readings.
+    // If num_samples <= 0, the value is automatically set to 1.
+    float measureDistanceCM(int num_samples = 1);
 
 };
 
@@ -25,7 +29,7 @@ void UltraSonicSensor::attach(int trigger_pin, int echo_pin){
     pinMode(echo_pin, INPUT);
 }
 
-float UltraSonicSensor::measureDistanceCM(){
+float UltraSonicSensor::__measureDistanceCM__(){
     digitalWrite(this->trigger_pin, LOW);
     delayMicroseconds(2);
     digitalWrite(this->trigger_pin, HIGH);
@@ -37,5 +41,16 @@ float UltraSonicSensor::measureDistanceCM(){
     return t*0.01715;
 }
 
+float UltraSonicSensor::measureDistanceCM(int num_samples){
+    if(num_samples <= 0)
+        num_samples = 1;
+    double total = 0;
+    for(int i = 0; i < num_samples; i++){
+        total += this->__measureDistanceCM__();
+        delay(1);
+    }
+
+    return float(total/num_samples);
+}
 
 #endif

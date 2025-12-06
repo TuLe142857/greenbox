@@ -1,6 +1,7 @@
 #ifndef APP_H
 #define APP_H
 
+
 #include <Arduino.h>
 #include <Servo.h>
 #include <LiquidCrystal_I2C.h>
@@ -263,12 +264,10 @@ void App::run()
                 }
 
                 lcd.clear();
-                lcd.setCursor(0, 0);
-                lcd.print("Garbage bin ");
-                lcd.print(next_bin_id);
-                lcd.setCursor(0, 1);
-                lcd.print(binLevel[next_bin_id]);
-                lcd.print(" %");
+                this->render(
+                    String(binLevel[0]) + " " + String(binLevel[1]),
+                    String(binLevel[2]) + " " + String(binLevel[3])
+                );
 
                 last_render = now;
                 next_bin_id = (next_bin_id+1)%GARBAGE_BIN_COUNT;
@@ -313,14 +312,24 @@ void App::run()
 
         case WAITING_FOR_GARBAGE:
         {
+            static bool is_human_get_out = false;
+            static unsigned long get_out_at = millis();
+            unsigned long now = millis();
             if (this->isGarbageOnTray())
             {
                 this->setState(CONFIRM_GARBAGE);
             }
             else if (!this->isHumanNearby())
             {
-                this->setState(NORMAL);
-                this->closeLid();
+                if(is_human_get_out && get_out_at - now > 1000){
+                    this->setState(NORMAL);
+                    this->closeLid();
+                    is_human_get_out = false;
+                }else if (!is_human_get_out){
+                    is_human_get_out = true;
+                    get_out_at = now;
+                }
+                
             }
             break;
         }
@@ -409,12 +418,22 @@ void App::addCommandHandler(String command, void (*handler)(String tokens[], int
 
 bool App::isGarbageOnTray()
 {
-    return this->garbageDetectSensor.measureDistanceCM() < GARBAGE_ON_TRAY_DETECT_THRESHOLD_CM;
+    float d = this->garbageDetectSensor.measureDistanceCM();
+    #ifdef DEBUG
+        Serial.print("Garbage sensor(cm): ");
+        Serial.println(d);
+    #endif
+    return d < GARBAGE_ON_TRAY_DETECT_THRESHOLD_CM;
 }
 
 bool App::isHumanNearby()
-{
-    return this->humanDetectSensor.measureDistanceCM() < HUMAN_DETECT_THRESHOLD_CM;
+{   
+    float d = this->humanDetectSensor.measureDistanceCM();
+    #ifdef DEBUG
+        Serial.print("Human detect sensor(cm): ");
+        Serial.println(d);
+    #endif
+    return d < HUMAN_DETECT_THRESHOLD_CM;
 }
 
 float App::getGarbageBinLevel(int binId)
@@ -435,6 +454,17 @@ float App::getGarbageBinLevel(int binId)
         garbage_fill_height = GARBAGE_BIN_DEPTH_CM;
 
     float fill_percentage = (garbage_fill_height / GARBAGE_BIN_DEPTH_CM) * 100;
+
+    #ifdef DEBUG
+        Serial.print("Garbage bin level-bin");
+        Serial.println(binId);
+        Serial.print(": ");
+        Serial.println(d);
+        Serial.print("(cm)~");
+        Serial.print(fill_percentage);
+        Serial.println("%");
+    #endif
+
     
     return fill_percentage;
 }
