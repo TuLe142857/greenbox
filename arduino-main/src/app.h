@@ -23,7 +23,7 @@
 #define LCD_I2C_ADDRESS 0x27
 #define LCD_ROWS 16
 #define LCD_COLUMNS 2
-#define LCD_RENDER_INTEVAL_MS 1000UL
+#define LCD_RENDER_INTEVAL_MS 250UL
 
 /*
 ------------------------------------------------
@@ -264,26 +264,46 @@ void App::run()
                 }
 
                 lcd.clear();
-                this->render(
-                    String(binLevel[0]) + " " + String(binLevel[1]),
-                    String(binLevel[2]) + " " + String(binLevel[3])
-                );
+                // this->render(
+                //     String(binLevel[0]) + " " + String(binLevel[1]),
+                //     String(binLevel[2]) + " " + String(binLevel[3])
+                // );
+                lcd.setCursor(0, 0);
+                lcd.print(binLevel[0]);
+
+                lcd.setCursor(8, 0);
+                lcd.print(binLevel[1]);
+
+                lcd.setCursor(0, 1);
+                lcd.print(binLevel[2]);
+
+                lcd.setCursor(8, 1);
+                lcd.print(binLevel[3]);
+
 
                 last_render = now;
                 next_bin_id = (next_bin_id+1)%GARBAGE_BIN_COUNT;
             }
 
             // check if human near -> change state to waiting for garbage
+            static unsigned long last_seen_human = 0; 
             if (this->isHumanNearby())
             {
-                this->openLid();
-                this->setState(WAITING_FOR_GARBAGE);
+                if(last_seen_human == 0){
+                    last_seen_human = millis();
+                }
+                if(millis() - last_seen_human > 300 ){
+                    last_seen_human = 0;
+                    this->openLid();
+                    this->setState(WAITING_FOR_GARBAGE);
 
-                this->lcd.clear();
-                this->lcd.setCursor(0, 0);
-                this->lcd.print("Vui long bo rac ");
-                this->lcd.setCursor(0, 1);
-                this->lcd.print("vao khay");
+                    this->lcd.clear();
+                    this->lcd.setCursor(0, 0);
+                    this->lcd.print("Vui long bo rac ");
+                    this->lcd.setCursor(0, 1);
+                    this->lcd.print("vao khay");
+                }
+                
             }
 
             break;
@@ -319,9 +339,10 @@ void App::run()
             {
                 this->setState(CONFIRM_GARBAGE);
             }
-            else if (!this->isHumanNearby())
+            // else if (!this->isHumanNearby()) // = if !(d < 30)
+            else if(this->humanDetectSensor.measureDistanceCM(2) > 35)
             {
-                if(is_human_get_out && get_out_at - now > 1000){
+                if(is_human_get_out && get_out_at - now > 300){
                     this->setState(NORMAL);
                     this->closeLid();
                     is_human_get_out = false;
@@ -418,9 +439,9 @@ void App::addCommandHandler(String command, void (*handler)(String tokens[], int
 
 bool App::isGarbageOnTray()
 {
-    float d = this->garbageDetectSensor.measureDistanceCM();
+    float d = this->garbageDetectSensor.measureDistanceCM(2);
     #ifdef DEBUG
-        Serial.print("Garbage sensor(cm): ");
+        Serial.print("Garbage detect sensor(cm): ");
         Serial.println(d);
     #endif
     return d < GARBAGE_ON_TRAY_DETECT_THRESHOLD_CM;
@@ -428,7 +449,7 @@ bool App::isGarbageOnTray()
 
 bool App::isHumanNearby()
 {   
-    float d = this->humanDetectSensor.measureDistanceCM();
+    float d = this->humanDetectSensor.measureDistanceCM(2);
     #ifdef DEBUG
         Serial.print("Human detect sensor(cm): ");
         Serial.println(d);

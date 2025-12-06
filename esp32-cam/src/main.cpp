@@ -8,12 +8,12 @@
     void setup()
     {
         Serial.begin(115200);
-        // AppConfig::clearConfig();
-        // AppConfig::writeConfig(
-        //     "TuLe456",
-        //     "tule1933",
-        //     "server_url";
-        // );
+        AppConfig::clearConfig();
+        AppConfig::writeConfig(
+            "TuLe456",
+            "tule1933",
+            "http://10.161.66.146:5000/classify"
+        );
         app.init(
             BLYNK_AUTH_TOKEN,
             BLYNK_UPDATE_INTERVAL_MS
