@@ -13,8 +13,7 @@
         AppConfig::writeConfig(
             "TuLe456",
             "tule1933",
-            "http://10.249.189.196:5000/#define I2C_SDA  5
-#define I2C_SCL  3classify"
+            "http://10.249.189.196:5000/classify"
         );
         app.init(
             BLYNK_AUTH_TOKEN,
