@@ -3,8 +3,8 @@
 #define ULTRASONIC_SENSOR
 
 #include<Arduino.h>
-
-class UltraSonicSensor{
+#include"distance_sensor.h"
+class UltraSonicSensor:public DistanceSensor{
 private:
     int trigger_pin;
     int echo_pin;

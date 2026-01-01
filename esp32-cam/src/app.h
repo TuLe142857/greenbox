@@ -172,6 +172,8 @@ void App::initCommandHandlers()
             
             bool flash_on = tokens.size() > 1 && tokens[1] == "--flash";
             camera_fb_t *fb = this->camera.capture(flash_on);
+            Serial.println("CLASSIFYING");
+            
             String response, error;
             if (this->sendImageToServer(fb, response, error)){
                 Serial.println("CLASS " + response);
@@ -220,9 +222,11 @@ void App::setState(AppState state){
     switch (this->current_state){
         case AppState::NORMAL:
         {   
+            // digitalWrite(LED_PIN, LED_ON);
             break;
         }
         case AppState::CONFIG_MODE:{
+            // digitalWrite(LED_PIN, LED_ON);
             break;
         }
         case AppState::WIFI_CONNECTING:{
@@ -235,6 +239,7 @@ void App::setState(AppState state){
             break;
         }
         case AppState::WIFI_DISCONNECTED:{
+            // digitalWrite(LED_PIN, LED_OFF);
             this->wifi_disconnected_at = millis();
             break;
         }

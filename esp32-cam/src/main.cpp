@@ -1,6 +1,7 @@
 #define PRODUCTION
 // #define DEBUG
-
+#include<Arduino.h>
+// #define TEST_UART
 #ifdef PRODUCTION
     #include "blynk_config.h"
     #include "app.h"
@@ -12,7 +13,8 @@
         AppConfig::writeConfig(
             "TuLe456",
             "tule1933",
-            "http://10.161.66.146:5000/classify"
+            "http://10.249.189.196:5000/#define I2C_SDA  5
+#define I2C_SCL  3classify"
         );
         app.init(
             BLYNK_AUTH_TOKEN,
@@ -57,6 +59,16 @@
     }
 
     void loop() {}
+#elif defined(TEST_UART)
+    void setup(){
+        Serial.begin(115200);
+    }
+
+    long count = 0;
+    void loop(){
+        Serial.println("ESP " + String(count ++));
+        delay(1000);
+    }
 #endif
 
 
