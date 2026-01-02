@@ -1,35 +1,30 @@
 #ifndef APP_H
 #define APP_H
 
+
+#include <Arduino.h>
+#include <Servo.h>
 #include <LiquidCrystal_I2C.h>
 #include "uart.h"
 #include "utils.h"
 #include "devices/triple_servo.h"
 #include "devices/ultrasonic_sensor.h"
-
-#define LID_OPEN_ANGLE 90
-#define LID_CLOSE_ANGLE 0
-#define LID_IMAGE_CAPTURE_ANGLE 60
-
-
+#define IMAGE_CAPTURE_ANGLE 60
 #define GARBAGE_BIN_COUNT 4
 #define GARBAGE_BIN_LEVEL_SENSOR_OFF_SET_CM 18
 #define GARBAGE_BIN_DEPTH_CM 18
 
 #define HUMAN_DETECT_THRESHOLD_CM 30
-#define HUMAN_DETECT_THRESHOLD_MS 300
 #define GARBAGE_ON_TRAY_DETECT_THRESHOLD_CM 15
 
 #define CLASSIFY_TIMEOUT_MS 15000UL
 #define DELAY_TIME_CONFIRM_GARBAGE_MS 2000UL
 
 #define LCD_I2C_ADDRESS 0x27
-#define LCD_ROWS 16
-#define LCD_COLUMNS 2
+#define LCD_ROWS 2
+#define LCD_COLUMNS 16
+#define LCD_RENDER_INTEVAL_MS 1000UL
 
-const String CLASSIFY_RESULT_MAPPING[GARBAGE_BIN_COUNT] = {
-    "ORGANIC", "PAPER", "METAL", "PLASTIC"
-}; 
 /*
 ------------------------------------------------
             PROTOTYPES
@@ -72,7 +67,7 @@ private:
 
     String error_message;
 
-    int classify_result; // bin_id 0-3
+    int classify_result; // bin_id
 
     UART uart;
 
@@ -83,27 +78,16 @@ private:
     UltraSonicSensor garbageDetectSensor, humanDetectSensor;
     UltraSonicSensor garbageBinLevelSensor[GARBAGE_BIN_COUNT];
 
-    /**
-     * @brief Inititalize UART command handlers
-     */
-    void initCommandHandler();
 public:
     App();
-
-    /**
-     * @brief Inittialize Application
-     */
     void init();
-
-    /**
-     * @brief Primary Loop
-     */
     void run();
 
+    void addCommandHandler(String command, void (*handler)(String tokens[], int n));
 
     bool isGarbageOnTray();
     bool isHumanNearby();
-    float getGarbageBinLevel(int bin_id); // fill percentage 0 - 100
+    float getGarbageBinLevel(int bin_id); // fill percentage %
 
     void setState(AppState state);
     void setErrorMessage(String message);
@@ -112,31 +96,16 @@ public:
     void closeLid();
     void openLid();
 
-    /**
-     * @brief Display text to LCD.
-     * @param line0 text display on first line, default ""
-     * @param line0 text display on second line, default ""
-     */
-    void display(const String line0="", const String line1="");
-
-    /**
-     * @brief Measure bin level + display to LCD. Auto set app state to GARBAGE_FULL and notify to ESP32-CAM when any bin level >= 90.
-     * @return true if garbage is full (any bin level >= 90), else return false.
-     */
-    boolean displayGarbageBinLevel();
-
+    //lcd
+    void render(const String line0="", const String line1="");
 
     void setClassifyResult(int bin_id);
     void dropGarbage();
 
-    /**
-     * @brief Send classify request to ESP32-CAM
-     */
+    // send classify request to ESP32-CAM
     void requestClassify();
 
-    /**
-     * @brief Send garbage bin level to ESP32-CAM. Auto set app state to GARBAGE_FULL when any bin level >= 90
-     */
+    // send garbage bin level to ESP32-CAM
     void reportGarbageBinLevel(float b1, float b2, float b3, float b4);
 };
 
@@ -177,16 +146,9 @@ void App::init(){
     this->lcd.init();
     this->lcd.backlight();
 
-    this->display("WAITING FOR", "ESP32-CAM ...");
-
     // uart & command handlers
     this->uart.init();
 
-    this->initCommandHandler();
-}
-
-void App::initCommandHandler(){
-    // on received status from ESP32-CAM
     this->uart.addCommandHandler(
         "ESP_STATUS",
         [](String tokens[], int n)
@@ -204,21 +166,21 @@ void App::initCommandHandler(){
                     // on config mode
                     case 1:{
                         app.setState(WAITING_FOR_ESP);
-                        app.display("PLEASE", "CONFIG WIFI");
+                        app.render("PLEASE", "CONFIG WIFI");
                         break;
                     }
 
                     // try connecting wifi
                     case 2:{
                         app.setState(WAITING_FOR_ESP);
-                        app.display("CONNECTING WIFI");
+                        app.render("CONNECTING WIFI");
                         break;
                     }
 
                     //wifi disconnected
                     case 3:{
                         app.setState(WAITING_FOR_ESP);
-                        app.display("WIFI", "DISCONNECTED");
+                        app.render("WIFI", "DISCONNECTED");
                         break;
                     }
                 }
@@ -226,41 +188,39 @@ void App::initCommandHandler(){
         }
     );
 
-    // on received garbage bin level request from ESP32-CAM
     this->uart.addCommandHandler(
         "GET_GARBAGE_BIN_LEVEL",
         [](String tokens[], int n)
         {
-            app.reportGarbageBinLevel(
+            app. reportGarbageBinLevel(
                 app.getGarbageBinLevel(0),
                 app.getGarbageBinLevel(1),
                 app.getGarbageBinLevel(2),
                 app.getGarbageBinLevel(3)
             );
         });
-
-    // on received notification "image is sending to server for classifying" from ESP32-CAM
     this->uart.addCommandHandler(
         "CLASSIFYING",
+        
         [](String tokens[], int n)
         {
+            
             if(app.current_state == CLASSIFYING){
                 delay(1000);
                 app.closeLid();
-            }       
+            }
+                
         });
-
-    // on  received classify result from ESP32-CAM
     this->uart.addCommandHandler(
         "CLASS",
         [](String tokens[], int n)
         {
+            
             if ((app.current_state != CLASSIFYING) || (n == 1))
                 return;
             app.setClassifyResult(tokens[1].toInt());
         });
 
-    // on received ERROR MESSAGE from ESP32-CAM
     this->uart.addCommandHandler(
         "ERROR",
         [](String tokens[], int n)
@@ -272,6 +232,10 @@ void App::initCommandHandler(){
             }
             app.setErrorMessage(message);
         });
+
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Hello Word");
 }
 
 void App::run()
@@ -282,49 +246,89 @@ void App::run()
     {
         case WAITING_FOR_ESP:
         {
-            // ping every 1s
             unsigned long now = millis();
             if((now - app.last_ping_at) > 1000){
                 Serial.println("PING");
-                this->last_ping_at = now;
+                // this->render("PING...");
+                app.last_ping_at = now;
             }
             break;
         }
-
         case NORMAL:
         {
-
+            // lcd render garbage bin level
+            static float binLevel[GARBAGE_BIN_COUNT] = {0, 0, 0, 0};
             static unsigned long last_render = 0;
-            static unsigned long last_seen_human = 0;
+            // static int next_bin_id = 0;
             unsigned long now = millis();
 
+            // if ((now - last_render) >= LCD_RENDER_INTEVAL_MS){
+            //     binLevel[next_bin_id] = this->getGarbageBinLevel(next_bin_id);
+            //     if(binLevel[next_bin_id] >= 90){
 
-            // display garbage bin level on LCD
-            // if garbage full => change state to GARBAGE_FULL
-            if ((now - last_render) >= 1000){
-                // this method display bin level
-                // when garbage full(any bin level >= 90), auto: 
-                //      - set AppState to GARBAGE_FULL
-                //      - send notification to ESP32-CAM
-                boolean isFull = this->displayGarbageBinLevel();
+            //         this->lcd.clear();
+            //         this->lcd.setCursor(0, 0);
+            //         this->lcd.print("GARBAGE FULL");
+
+            //         this->setState(GARBAGE_FULL);
+
+            //         last_render = now;
+            //         next_bin_id = (next_bin_id+1)%GARBAGE_BIN_COUNT;
+            //         break;
+            //     }
+            if ((now - last_render) >= LCD_RENDER_INTEVAL_MS){
+                boolean isFull = false;
+                int id;
+                for(int i = 0; i < GARBAGE_BIN_COUNT; i++){
+                    binLevel[i] = this->getGarbageBinLevel(i);
+                    if(binLevel[i] >= 90){
+                        isFull = true;
+                        id = i;
+                    }
+                }
+                lcd.clear();
+                lcd.setCursor(8, 1);
+                lcd.print(binLevel[0]);
+                lcd.setCursor(8, 0);
+                lcd.print(binLevel[1]);
+                lcd.setCursor(0, 0);
+                lcd.print(binLevel[2]);
+                lcd.setCursor(0, 1);
+                lcd.print(binLevel[3]);
                 last_render = now;
-                if(isFull)
-                    break;
+
+                if(isFull){
+                    this->lcd.clear();
+                    this->lcd.print("GARBAGE FULL");
+                    this->lcd.setCursor(0, 1);
+                    this->lcd.print("Bin id: ");
+                    this->lcd.print(id);
+                    this->setState(GARBAGE_FULL);
+                    break; //break case
+                }
             }
                 
             // check if human near -> change state to waiting for garbage
-            if (this->isHumanNearby()){
+            static unsigned long last_seen_human = 0; 
+            if (this->isHumanNearby())
+            {
                 if(last_seen_human == 0){
-                    last_seen_human = now;
+                    last_seen_human = millis();
                 }
-                if(now - last_seen_human > HUMAN_DETECT_THRESHOLD_MS){
-                    this->setState(WAITING_FOR_GARBAGE);
-                    this->display("Vui long bo rac", "vao khay");
-                    // reset
+                if(millis() - last_seen_human > 300 ){
                     last_seen_human = 0;
-                    last_render = 0;
+                    this->openLid();
+                    this->setState(WAITING_FOR_GARBAGE);
+
+                    this->lcd.clear();
+                    this->lcd.setCursor(0, 0);
+                    this->lcd.print("Vui long bo rac ");
+                    this->lcd.setCursor(0, 1);
+                    this->lcd.print("vao khay");
                 }
+                
             }
+
             break;
         }
         
@@ -333,22 +337,19 @@ void App::run()
             static unsigned long last_recheck = 0;
             unsigned long now = millis();
 
-            // recheck after 1s
-            if ((now - last_recheck) > 1000UL){
-                float binLevel[GARBAGE_BIN_COUNT];
-                boolean isFull = false;
-                for(int i = 0; i < GARBAGE_BIN_COUNT; i++){
-                    binLevel[i] = this->getGarbageBinLevel(i);
-                    if(binLevel[i] >= 90)
-                        isFull = true;
-                }
-                if (! isFull){
-                    this->setState(NORMAL);
-                    this->reportGarbageBinLevel(binLevel[0], binLevel[1], binLevel[2], binLevel[3]);
-                }
-                last_recheck = now;
+            // recheck after 2s
+            if ((now - last_recheck) < 2000UL)
+                break;
+            
+            if ((this->getGarbageBinLevel(0) <= 90) ||
+                (this->getGarbageBinLevel(1) <= 90) ||
+                (this->getGarbageBinLevel(2) <= 90) ||
+                (this->getGarbageBinLevel(3) <= 90)
+            ){
+                this->setState(NORMAL);
             }
-                
+
+            last_recheck = now;
             break;
         }
 
@@ -361,15 +362,18 @@ void App::run()
             {
                 this->setState(CONFIRM_GARBAGE);
             }
-            else if(!this->isHumanNearby())
+            // else if (!this->isHumanNearby()) // = if !(d < 30)
+            else if(this->humanDetectSensor.measureDistanceCM(2) > 35)
             {
                 if(is_human_get_out && get_out_at - now > 300){
                     this->setState(NORMAL);
-                    is_human_get_out = false;   // reset
+                    this->closeLid();
+                    is_human_get_out = false;
                 }else if (!is_human_get_out){
                     is_human_get_out = true;
                     get_out_at = now;
-                }   
+                }
+                
             }
             break;
         }
@@ -384,10 +388,16 @@ void App::run()
             unsigned long now = millis();
             if ((now - this->start_confirm_garbage_at) >= (DELAY_TIME_CONFIRM_GARBAGE_MS))
             {
+                // this->closeLid();
                 this->setState(CLASSIFYING);
                 App::requestClassify();
 
-                this->display("Dang phan loai", "rac...");
+                this->lcd.clear();
+                this->lcd.setCursor(0, 0);
+                this->lcd.print("Dang phan loai");
+                this->lcd.setCursor(0, 1);
+                this->lcd.print("rac...");
+
             }
             break;
         }
@@ -406,16 +416,17 @@ void App::run()
 
         case DROPPING_GARBAGE:
         {
+            this->lcd.clear();
+            this->lcd.setCursor(0, 0);
+            this->lcd.print("Phan loai: ");
             this->lcd.print(this->classify_result);
-            this->display("Phan loai rac:", CLASSIFY_RESULT_MAPPING[this->classify_result]);
             this->dropGarbage();
             break;
         }
 
         case ERROR:
         {
-            this->display("ERROR: ", this->error_message);
-            delay(1000);
+            Serial.println("Something wrong: " + this->error_message);
             if (this->previous_state != ERROR)
             {
                 this->setState(this->previous_state);
@@ -427,15 +438,16 @@ void App::run()
             else
             {
                 this->setState(NORMAL);
+                this->closeLid();
             }
             break;
         }
     } // end switch(this->current_state)
 
-    delay(1);
+    delay(10);
 }
 
-void App::display(const String line0, const String line1){
+void App::render(const String line0, const String line1){
     this->lcd.clear();
     this->lcd.setCursor(0, 0);
     this->lcd.print(line0);
@@ -443,28 +455,9 @@ void App::display(const String line0, const String line1){
     this->lcd.print(line1);
 }
 
-boolean App::displayGarbageBinLevel(){
-    float binLevel[GARBAGE_BIN_COUNT];
-    for(int i = 0;  i < GARBAGE_BIN_COUNT; i++){
-        binLevel[i] = this->getGarbageBinLevel(i);
-    }
-
-    // display result to LCD screen
-    lcd.clear();
-    lcd.setCursor(8, 1);    lcd.print(binLevel[0]);
-    lcd.setCursor(8, 0);    lcd.print(binLevel[1]);
-    lcd.setCursor(0, 0);    lcd.print(binLevel[2]);
-    lcd.setCursor(0, 1);    lcd.print(binLevel[3]);
-
-    boolean isFull =  (binLevel[0] >= 90) ||
-                      (binLevel[1] >= 90) ||
-                      (binLevel[2] >= 90) ||
-                      (binLevel[3] >= 90);
-    if (isFull){
-        // This method auto set app state to GARBAGE_FULL when any bin level >= 90
-        this->reportGarbageBinLevel(binLevel[0], binLevel[1], binLevel[2], binLevel[3]);
-    }
-    return isFull;
+void App::addCommandHandler(String command, void (*handler)(String tokens[], int n))
+{
+    this->uart.addCommandHandler(command, handler);
 }
 
 bool App::isGarbageOnTray()
@@ -522,47 +515,21 @@ float App::getGarbageBinLevel(int binId)
 
 void App::setState(AppState state)
 {
-    if (state == this->current_state){
+    if (state == this->current_state)
+    {
         return;
+    }
+    else if (state == CONFIRM_GARBAGE)
+    {
+        this->start_confirm_garbage_at = millis();
+    }
+    else if (state == CLASSIFYING)
+    {
+        this->start_classify_at = millis();
     }
 
     this->previous_state = current_state;
     this->current_state = state;
-    switch (this->current_state){
-        case WAITING_FOR_ESP:{
-            this->closeLid();
-            break;
-        }
-        case NORMAL:{
-            this->closeLid();
-            break;
-        }
-        case GARBAGE_FULL:{
-            this->display("RAC DAY!");
-            this->closeLid();
-            break;
-        }
-        case WAITING_FOR_GARBAGE:{
-            this->openLid();
-            break;
-        }
-        case CONFIRM_GARBAGE:{
-            this->start_confirm_garbage_at = millis();
-            break;
-        }
-        case CLASSIFYING:{
-            this->start_classify_at = millis();
-            break;
-        }
-        case DROPPING_GARBAGE:{
-            this->closeLid();
-            break;
-        }
-        case ERROR:{
-            this->closeLid();
-            break;
-        }
-    }
 
     // DEBUG
     Serial.println("===== DEBUG =====");
@@ -624,19 +591,17 @@ void App::dropGarbage()
 }
 
 void App::requestClassify(){
-    this->rotateLid(LID_IMAGE_CAPTURE_ANGLE);
+    this->rotateLid(IMAGE_CAPTURE_ANGLE);
+    // Serial.println("CLASSIFY --flash");
     Serial.println("CLASSIFY");
 }
 
-void App::reportGarbageBinLevel(float b0, float b1, float b2, float b3){
-    if((b0 >= 90    ) || (b1 >= 90) || (b2 >= 90) || (b3 >= 90)){
-        this->setState(GARBAGE_FULL);
-    }
+void App::reportGarbageBinLevel(float b1, float b2, float b3, float b4){
     Serial.println(
-        "GARBAGE_BIN_LEVEL " + String(b0)
-        + " " + String(b1)
+        "GARBAGE_BIN_LEVEL " + String(b1)
         + " " + String(b2)
-        + " " + String(b3) 
+        + " " + String(b3)
+        + " " + String(b4) 
     );
 }
 
