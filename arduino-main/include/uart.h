@@ -2,14 +2,12 @@
 #define UART_H
 
 #include "utils.h"
-#include <Arduino.h>
 
 /*
 ------------------------------------------------
             PROTOTYPES
 ------------------------------------------------
 */
-
 
 struct CommandHandler{
     String command;
@@ -63,16 +61,11 @@ void UART::addCommandHandler(String command, void (*handler)(String tokens[], in
 void UART::run(){
     if (!Serial.available())
         return;
+
     String s = Serial.readStringUntil('\n');
 
     int tokens_count;
     parse_tokens(s, this->tokens, MAX_TOKENS, tokens_count);
-
-    // Serial.print("Arduino received: "); Serial.println(s);
-    // Serial.println("Parse into " + String(tokens_count) + " tokens");
-    // for (int i = 0; i < tokens_count; i++){
-    //     Serial.println("Tokens " + String(i) + ": " + this->tokens[i]);
-    // }
 
     if (tokens_count == 0){
         return;
