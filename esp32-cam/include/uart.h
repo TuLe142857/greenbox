@@ -2,13 +2,10 @@
 #define UART_H
 
 #include <Arduino.h>
-#include <HTTPClient.h>
 #include <functional>
 #include <map>
 
-#include "camera.h"
 #include "utils.h"
-#include "uart.h"
 
 /*
 -------------------------------------------------
@@ -16,6 +13,9 @@
 -------------------------------------------------
 */
 
+/**
+ * @brief This class implement UART communication
+ */
 class UART
 {
 private:
@@ -34,6 +34,7 @@ public:
 
 void UART::init(){}
 
+
 void UART::addCommandHandler(String command, std::function<void(std::vector<String> tokens)> handler){
     this->command_handlers[command] = handler;
 }
@@ -44,14 +45,15 @@ void UART::run()
     if (!Serial.available())
         return;
     String s = Serial.readStringUntil('\n');
-    // Serial.println("ESP Recieved "+ s);
     std::vector<String> tokens = parse_tokens(s);
-    
     if (tokens.size() == 0)
         return;
-    if (this->command_handlers.count(tokens[0])){
-        this->command_handlers[tokens[0]](tokens);
+
+    String command = tokens[0];
+    if (this->command_handlers.count(command)){
+        this->command_handlers[command](tokens);
     }
 }
+
 
 #endif

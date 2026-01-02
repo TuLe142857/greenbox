@@ -2,16 +2,19 @@
 #define APP_UTILS_FUNCTION_H
 
 #include <Arduino.h>
-#include <WiFi.h>
-#include <esp_camera.h>
 #include <vector>
-#include <HTTPClient.h>
 
 /*
 -----------------------------------------------------
                 FUNCTION PROTOTYPES
 -----------------------------------------------------
 */
+
+/**
+ * @brief Splits a string into tokens, respecting double quotes.
+ * @param s input string
+ * @return std::vector<String> A list of extracted tokens.
+ */
 std::vector<String> parse_tokens(String s);
 
 /*
@@ -19,6 +22,7 @@ std::vector<String> parse_tokens(String s);
                 FUNCTION DEFINITIONS
 -----------------------------------------------------
 */
+
 std::vector<String> parse_tokens(String s)
 {
     std::vector<String> tokens;

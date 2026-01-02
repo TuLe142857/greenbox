@@ -41,7 +41,19 @@ private:
     camera_fb_t *fb;
 public:
     Camera() {};
-    bool init(framesize_t frame_size=FRAMESIZE_240X240);
+
+    /**
+     * @brief Initialize Camera
+     * @param frame_size camera frame size. Default: VGA - 640*480 
+     * @return result - if the camera initialize success or not
+     */
+    bool init(framesize_t frame_size=FRAMESIZE_VGA);
+
+    /**
+     * @brief capture camera
+     * @param flash_on if the fash is on or off
+     * @return camera image buffer
+     */
     camera_fb_t *capture(bool flash_on = false);
 };
 
@@ -83,8 +95,7 @@ bool Camera::init(framesize_t frame_size)
 
     // camera frame option, can modify
     config.pixel_format = PIXFORMAT_JPEG;
-    // config.frame_size = FRAMESIZE_240X240;
-    config.frame_size = FRAMESIZE_VGA;
+    config.frame_size = frame_size;
     config.jpeg_quality = 12;
     config.fb_location = CAMERA_FB_IN_PSRAM;
     config.fb_count = 1;
