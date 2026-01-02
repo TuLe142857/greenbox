@@ -6,7 +6,7 @@ from service import ClassifyService
 
 classify_bp = Blueprint('classify_api', __name__, url_prefix="/classify")
 
-@classify_bp.route("/", methods=["POST"])
+@classify_bp.route("", methods=["POST"])
 def classify():
     data = request.data
     if len(data) == 0:
