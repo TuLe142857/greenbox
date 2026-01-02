@@ -22,7 +22,7 @@
     python -m venv .venv
     .\venv_name\Scripts\activate
     pip install -r requirements.txt
-    python src\server.py
+    python run.py
 ```
 
 #### Dùng WSL:
