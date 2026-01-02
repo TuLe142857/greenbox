@@ -9,12 +9,12 @@
     void setup()
     {
         Serial.begin(115200);
-        AppConfig::clearConfig();
-        AppConfig::writeConfig(
-            "TuLe456",
-            "tule1933",
-            "http://10.249.189.196:5000/classify"
-        );
+        // AppConfig::clearConfig();
+        // AppConfig::writeConfig(
+        //     "H 08",
+        //     "000000000",
+        //     "http://192.168.1.134:5000/classify"
+        // );
         app.init(
             BLYNK_AUTH_TOKEN,
             BLYNK_UPDATE_INTERVAL_MS

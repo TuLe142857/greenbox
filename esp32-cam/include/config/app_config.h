@@ -83,7 +83,7 @@ void AppConfig::writeConfig(const String &wifi_ssid, const String &wifi_password
 }
 
 void AppConfig::writeConfigWiFi(const String &wifi_ssid, const String &wifi_password=""){
-    Serial.printf("Write config wifi %s %s\n", wifi_ssid, wifi_password);
+    Serial.printf("Write config wifi '%s' '%s'\n", wifi_ssid, wifi_password);
     Preferences pref;
     pref.begin(AppConfig::NAMESPACE);
     pref.putString(AppConfig::KEY_WIFI_SSID, wifi_ssid);
@@ -92,7 +92,7 @@ void AppConfig::writeConfigWiFi(const String &wifi_ssid, const String &wifi_pass
 }
 
 void AppConfig::writeConfigServer(const String &server_url){
-    Serial.printf("Write server wifi %s\n", server_url);
+    Serial.printf("Write config server '%s'\n", server_url);
     Preferences pref;
     pref.begin(AppConfig::NAMESPACE);
     pref.putString(AppConfig::KEY_SERVER_URL, server_url);

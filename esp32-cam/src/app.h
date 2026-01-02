@@ -102,6 +102,7 @@ void App::run()
             wcp.run([this](){
                 this->uart.run();
             });
+            AppConfig::readConfig(this->wifi_ssid, this->wifi_password, this->server_url);
             this->setState(AppState::WIFI_CONNECTING);
             break;
         }
@@ -142,6 +143,7 @@ void App::run()
     // check reset button
     if(digitalRead(this->resetButtonPin)==LOW){
         AppConfig::clearConfig();
+        this->setState(AppState::CONFIG_MODE);
     }
 
     this->uart.run();
