@@ -538,6 +538,7 @@ void App::setState(AppState state)
             break;
         }
         case GARBAGE_FULL:{
+            this->display("RAC DAY!");
             this->closeLid();
             break;
         }
@@ -628,7 +629,7 @@ void App::requestClassify(){
 }
 
 void App::reportGarbageBinLevel(float b0, float b1, float b2, float b3){
-    if((b0 >= 90) || (b1 >= 90) || (b2 >= 90) || (b3 >= 90)){
+    if((b0 >= 90    ) || (b1 >= 90) || (b2 >= 90) || (b3 >= 90)){
         this->setState(GARBAGE_FULL);
     }
     Serial.println(
