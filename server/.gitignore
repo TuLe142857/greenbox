@@ -1,6 +1,7 @@
 # pycharm
 .idea/
-imgs/
+images/
+models/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
