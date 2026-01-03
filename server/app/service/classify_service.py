@@ -52,7 +52,7 @@ class ClassifyService:
                 return False
 
     @staticmethod
-    def classify(img, conf: float = 0.4) -> None | int:
+    def classify(img, conf: float = 0.5) -> None | int:
         if not ClassifyService.MODEL:
             if not ClassifyService.load_default_model():
                 current_app.logger.warning("Model not loaded")

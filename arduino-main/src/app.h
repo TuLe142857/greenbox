@@ -304,6 +304,7 @@ void App::run()
                     this->lcd.print("Bin id: ");
                     this->lcd.print(id);
                     this->setState(GARBAGE_FULL);
+                    this->reportGarbageBinLevel(binLevel[0], binLevel[1], binLevel[2], binLevel[3]);
                     break; //break case
                 }
             }
@@ -335,20 +336,25 @@ void App::run()
         case GARBAGE_FULL:
         {   
             static unsigned long last_recheck = 0;
+            
             unsigned long now = millis();
 
+            static float binLevel[GARBAGE_BIN_COUNT] = {0, 0, 0, 0};
+            boolean isFull = false;
+            for(int i = 0; i < GARBAGE_BIN_COUNT; i++){
+                binLevel[i] = this->getGarbageBinLevel(i);
+                if(binLevel[i] >= 90){
+                    isFull = true;
+                }
+            }
             // recheck after 2s
             if ((now - last_recheck) < 2000UL)
                 break;
             
-            if ((this->getGarbageBinLevel(0) <= 90) ||
-                (this->getGarbageBinLevel(1) <= 90) ||
-                (this->getGarbageBinLevel(2) <= 90) ||
-                (this->getGarbageBinLevel(3) <= 90)
-            ){
+            if (! isFull){
+                this->reportGarbageBinLevel(binLevel[0], binLevel[1], binLevel[2], binLevel[3]);
                 this->setState(NORMAL);
             }
-
             last_recheck = now;
             break;
         }
@@ -363,7 +369,8 @@ void App::run()
                 this->setState(CONFIRM_GARBAGE);
             }
             // else if (!this->isHumanNearby()) // = if !(d < 30)
-            else if(this->humanDetectSensor.measureDistanceCM(2) > 35)
+            // else if(this->humanDetectSensor.measureDistanceCM(2) > 35)
+            else if(!this->isHumanNearby())
             {
                 if(is_human_get_out && get_out_at - now > 300){
                     this->setState(NORMAL);
@@ -574,6 +581,8 @@ void App::setClassifyResult(int bin_id)
 {
     if (!(bin_id >= 0 && bin_id < GARBAGE_BIN_COUNT))
     {
+        this->setState(NORMAL);
+        this->render("NO GARBAGE", "DETECT");
         return;
     }
     this->classify_result = bin_id;
@@ -593,16 +602,22 @@ void App::dropGarbage()
 void App::requestClassify(){
     this->rotateLid(IMAGE_CAPTURE_ANGLE);
     // Serial.println("CLASSIFY --flash");
+    delay(1000);
     Serial.println("CLASSIFY");
 }
 
 void App::reportGarbageBinLevel(float b1, float b2, float b3, float b4){
-    Serial.println(
-        "GARBAGE_BIN_LEVEL " + String(b1)
-        + " " + String(b2)
-        + " " + String(b3)
-        + " " + String(b4) 
-    );
+    Serial.print("GARBAGE_BIN_LEVEL");
+    Serial.print(" "); Serial.print(b1);
+    Serial.print(" "); Serial.print(b2);
+    Serial.print(" "); Serial.print(b3);
+    Serial.print(" "); Serial.print(b4);
+    Serial.println();
+
+    // if(b1 >= 90 || b2 >= 90 || b3 >= 90 || b4 >= 90){
+    //     this->setState(GARBAGE_FULL);
+    //     this->render("GARBAGE FULL");
+    // }
 }
 
 #endif

@@ -114,7 +114,7 @@ void WiFiConfigPortal::init(const String ap_ssid, const String ap_password){
 
         // write config
         AppConfig::writeConfigWiFi(this->webServer.arg("wifi_ssid"), this->webServer.arg("wifi_password"));
-        if(this->need_config_server_url){
+        if(this->webServer.hasArg("server_url")){
             AppConfig::writeConfigServer(this->webServer.arg("server_url"));
         }
 

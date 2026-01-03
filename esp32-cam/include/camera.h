@@ -47,7 +47,11 @@ public:
      * @param frame_size camera frame size. Default: VGA - 640*480 
      * @return result - if the camera initialize success or not
      */
-    bool init(framesize_t frame_size=FRAMESIZE_VGA);
+    bool init(
+        // framesize_t frame_size=FRAMESIZE_VGA
+        framesize_t frame_size=FRAMESIZE_HD
+        // framesize_t frame_size=FRAMESIZE_SXGA
+    );
 
     /**
      * @brief capture camera
