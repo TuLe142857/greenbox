@@ -425,8 +425,31 @@ void App::run()
         {
             this->lcd.clear();
             this->lcd.setCursor(0, 0);
-            this->lcd.print("Phan loai: ");
-            this->lcd.print(this->classify_result);
+            // this->lcd.print("Phan loai: ");
+            // this->lcd.setCursor(0, 1);
+            switch (this->classify_result){
+                case 0:{
+                    this->lcd.print("Huu Co");
+                    break;
+                }
+                case 1:{
+                    this->lcd.print("Giay");
+                    break;
+                }
+                case 2:{
+                    this->lcd.print("Kim loai");
+                    break;
+                }
+                case 3:{
+                    this->lcd.print("Nhua");
+                    break;
+                }
+                default:{
+                    this->lcd.print("Khong phat hien");
+                    break;
+                }
+            }
+            
             this->dropGarbage();
             break;
         }
