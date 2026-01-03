@@ -4,9 +4,11 @@
 #include<Arduino.h>
 #include<Preferences.h>
 
+/**
+ * @brief Manages application configuration settings. Stores settings (WiFi credentials, Server URL) is in the ESP32's non-volatile storage (NVS) using the Preferences library.
+ */
 class AppConfig{
 private:
-    static const String HTML_TEMPLATE;
     static const  char* NAMESPACE;
     static const  char* KEY_WIFI_SSID;
     static const  char* KEY_WIFI_PASSWORD;
@@ -83,7 +85,6 @@ void AppConfig::writeConfig(const String &wifi_ssid, const String &wifi_password
 }
 
 void AppConfig::writeConfigWiFi(const String &wifi_ssid, const String &wifi_password=""){
-    Serial.printf("Write config wifi '%s' '%s'\n", wifi_ssid, wifi_password);
     Preferences pref;
     pref.begin(AppConfig::NAMESPACE);
     pref.putString(AppConfig::KEY_WIFI_SSID, wifi_ssid);
@@ -92,7 +93,6 @@ void AppConfig::writeConfigWiFi(const String &wifi_ssid, const String &wifi_pass
 }
 
 void AppConfig::writeConfigServer(const String &server_url){
-    Serial.printf("Write config server '%s'\n", server_url);
     Preferences pref;
     pref.begin(AppConfig::NAMESPACE);
     pref.putString(AppConfig::KEY_SERVER_URL, server_url);

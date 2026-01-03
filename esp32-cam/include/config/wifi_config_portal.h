@@ -10,6 +10,9 @@
 #include<functional>
 #include<config/app_config.h>
 
+/**
+ * @brief Host a Web Server and DNS Server for Wi-Fi configuration.
+ */
 class WiFiConfigPortal{
 private:
     static const String HTML_TEMPLATE;
@@ -20,9 +23,17 @@ private:
     String default_server_url;
 public:
     WiFiConfigPortal();
+
+    /**
+     * @brief Inititalize WifiConfig WebServer && DNS Server
+     * @param ap_ssid  Wifi Access Point SSID
+     * @param ap_password WiFi Access Point PASSWORD. Default: ""
+     */
     void init(const String ap_ssid, const String ap_password="");
 
-    // dosomething: function to handle something while run, to prevent blocking
+    /**
+     * @param dosomething function to handle something while run, to prevent blocking
+     */
     void run(std::function<void()>dosomething=[](){});
 };
 
@@ -82,10 +93,13 @@ void WiFiConfigPortal::init(const String ap_ssid, const String ap_password){
     });
 
     this->webServer.on("/submit", HTTP_POST, [this](){
-        Serial.println("\n\nSUBMIT CALL");
         // check request param
         if(! (this->webServer.hasArg("wifi_ssid"))) {
             this->webServer.send(400, "text/plain", "Missing parameter 'wifi_ssid'");
+            return;
+        }
+        if(this->webServer.arg("wifi_ssid").length() == 0){
+            this->webServer.send(400, "text/plain", "wifi_ssid can not be empty");
             return;
         }
 
@@ -93,12 +107,6 @@ void WiFiConfigPortal::init(const String ap_ssid, const String ap_password){
             this->webServer.send(400, "text/plain", "Missing parameter 'server_url'");
             return;
         }
-
-        if(this->webServer.arg("wifi_ssid").length() == 0){
-            this->webServer.send(400, "text/plain", "wifi_ssid can not be empty");
-            return;
-        }
-
         if(this->need_config_server_url && this->webServer.arg("server_url").length()==0){
             this->webServer.send(400, "text/plain", "server_url can not be empty");
             return;
@@ -106,7 +114,7 @@ void WiFiConfigPortal::init(const String ap_ssid, const String ap_password){
 
         // write config
         AppConfig::writeConfigWiFi(this->webServer.arg("wifi_ssid"), this->webServer.arg("wifi_password"));
-        if(this->need_config_server_url){
+        if(this->webServer.hasArg("server_url")){
             AppConfig::writeConfigServer(this->webServer.arg("server_url"));
         }
 
@@ -132,12 +140,10 @@ void WiFiConfigPortal::run(std::function<void()>dosomething){
         dosomething();
         delay(1);
     }
-    delay(3000);
+    delay(2000);
     this->dnsServer.stop();
     this->webServer.stop();
     WiFi.mode(WIFI_OFF);
-
-    Serial.println("CONFIG OK----------");
 }
 
 const String WiFiConfigPortal::HTML_TEMPLATE = R"raw_string(

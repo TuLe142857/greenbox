@@ -3,12 +3,13 @@
 
 #include <Arduino.h>
 #include <HTTPClient.h>
+
 #include "uart.h"
 #include "camera.h"
 #include "my_blynk.h"
+#include "config/app_config.h"
+#include "config/wifi_config_portal.h"
 #include "utils.h"
-#include <config/app_config.h>
-#include <config/wifi_config_portal.h>
 
 /*
 -------------------------------------------------
@@ -25,10 +26,11 @@ enum AppState{
 class App
 {
 private:
-    int resetButtonPin=2;
+    int resetButtonPin;
 
     AppState current_state;
     AppState previous_state;
+
     Camera camera;
     UART uart;
     MyBlynk myBlynk;
@@ -43,6 +45,7 @@ private:
     void initCommandHandlers();
     void setState(AppState state);
     void sendStateToArduino();
+    void fetchGarbageBinLevel();
     bool sendImageToServer(camera_fb_t *fb, String &response, String &error);
 public:
     App();
@@ -58,37 +61,50 @@ public:
                 DEFINITIONS
 -------------------------------------------------
 */
-App::App():current_state(AppState::NORMAL), previous_state(AppState::NORMAL){}
+
+// Blynk on update data request from app
+BLYNK_WRITE(V5){
+    int x = param.asInt();
+    if(x){
+        Serial.println("GET_GARBAGE_BIN_LEVEL");
+        Blynk.virtualWrite(V5, 0);
+    };
+}
+
+App::App():
+    current_state(AppState::NORMAL),
+    previous_state(AppState::NORMAL),
+    resetButtonPin(2)
+{}
 
 void App::init(
     const char *blynk_auth_token,
     unsigned long blynk_update_interval_ms)
 {
+    pinMode(this->resetButtonPin, INPUT_PULLUP);
+    
     if(! AppConfig::readConfig(this->wifi_ssid, this->wifi_password, this->server_url)){
         this->setState(AppState::CONFIG_MODE);
     }else{
         this->setState(AppState::WIFI_CONNECTING);
     }
-    pinMode(this->resetButtonPin, INPUT_PULLUP);
+    
+
     this->camera.init();
 
     this->uart.init();
 
     this->myBlynk.init(blynk_auth_token);
-
     this->myBlynk.addTimerFunction(
-        // request get data
         [this]()
         {
-            Serial.println("GET_GARBAGE_BIN_LEVEL");
+            this->fetchGarbageBinLevel();
         },
         blynk_update_interval_ms
     );
 
     this->initCommandHandlers();
 
-    // update blynk on startup
-    Serial.println("GET_GARBAGE_BIN_LEVEL");
     digitalWrite(LED_PIN, LED_ON);
 }
 
@@ -106,16 +122,16 @@ void App::run()
             this->setState(AppState::WIFI_CONNECTING);
             break;
         }
+
         case AppState::NORMAL:
         {
             if(WiFi.status() != WL_CONNECTED){
                 this->setState(AppState::WIFI_CONNECTING);
                 break;
             }
-
-            
             break;
         }
+
         case AppState::WIFI_CONNECTING:{
             if(WiFi.status() == WL_CONNECTED){
                 this->setState(AppState::NORMAL);
@@ -129,6 +145,7 @@ void App::run()
             }
             break;
         }
+
         case AppState::WIFI_DISCONNECTED:
         {   
             static const unsigned long retry_connectting_after = 3000;
@@ -151,7 +168,7 @@ void App::run()
     if (WiFi.status() == WL_CONNECTED)
         this->myBlynk.run();
 
-    delay(10);
+    delay(1);
 }
 
 void App::initCommandHandlers()
@@ -181,7 +198,7 @@ void App::initCommandHandlers()
                 Serial.println("CLASS " + response);
                 
                 // request get bin level after classify
-                Serial.println("GET_GARBAGE_BIN_LEVEL");
+                this->fetchGarbageBinLevel();
             }else{
                 Serial.println("ERROR " + error);
             }
@@ -218,17 +235,16 @@ void App::setState(AppState state){
     this->previous_state = this->current_state;
     this->current_state = state;
 
-    // send to arduino
+    // send app state to arduino
     this->sendStateToArduino();
 
     switch (this->current_state){
         case AppState::NORMAL:
         {   
-            // digitalWrite(LED_PIN, LED_ON);
+            this->fetchGarbageBinLevel();
             break;
         }
         case AppState::CONFIG_MODE:{
-            // digitalWrite(LED_PIN, LED_ON);
             break;
         }
         case AppState::WIFI_CONNECTING:{
@@ -241,11 +257,14 @@ void App::setState(AppState state){
             break;
         }
         case AppState::WIFI_DISCONNECTED:{
-            // digitalWrite(LED_PIN, LED_OFF);
             this->wifi_disconnected_at = millis();
             break;
         }
     }
+}
+
+void App::fetchGarbageBinLevel(){
+    Serial.println("GET_GARBAGE_BIN_LEVEL");
 }
 
 bool App::sendImageToServer(camera_fb_t *fb, String &response, String &error){

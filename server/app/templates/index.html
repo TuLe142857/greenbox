@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GreenBox - Dashboard</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background-color: #f4f4f4; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        h1 { color: #2e7d32; text-align: center; }
+        h3 { border-bottom: 2px solid #eee; padding-bottom: 10px; margin-top: 0; }
+
+        /* Style hiển thị ảnh */
+        .image-container { text-align: center; margin: 10px 0; }
+        img { max-width: 100%; border: 1px solid #ddd; border-radius: 4px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+
+        /* Style control */
+        .control-group { margin: 15px 0; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;}
+        select, input[type="file"] { padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+        select { flex-grow: 1; }
+
+        button { padding: 8px 15px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; transition: 0.3s; }
+        button:hover { background-color: #0056b3; }
+        button.btn-test { background-color: #28a745; }
+        button.btn-test:hover { background-color: #218838; }
+
+        .current-tag { font-weight: bold; color: #d32f2f; }
+        .result-box { margin-top: 10px; font-weight: bold; color: #333; }
+    </style>
+</head>
+<body>
+
+    <h1>🌿 GreenBox Dashboard</h1>
+
+    <div class="card">
+        <h3>Camera & Kết quả (ESP32)</h3>
+        <div class="image-container">
+            <img src="/latest" alt="Chưa có ảnh từ ESP32" "/>
+        </div>
+        <div>
+            <p><strong>Kết quả gần nhất:</strong> {{ latest_rest }}</p>
+            <p><strong>Thời gian:</strong> {{ latest_time }}</p>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>Cấu hình Model AI</h3>
+        <p>Model đang sử dụng: <span id="current-model-display" class="current-tag">...</span></p>
+
+        <div class="control-group">
+            <select id="model-select">
+                <option value="" disabled selected>Đang tải danh sách...</option>
+            </select>
+            <button onclick="changeModel()">Chuyển Model</button>
+        </div>
+        <p id="model-msg" style="font-size: 0.9em;"></p>
+    </div>
+
+    <div class="card">
+        <h3>Test Phân loại (Upload Ảnh)</h3>
+        <div class="control-group">
+            <input type="file" id="test-upload" accept="image/*" onchange="previewImage()">
+            <button class="btn-test" onclick="uploadAndClassify()">Gửi & Phân loại</button>
+        </div>
+
+        <div class="image-container">
+            <img id="preview-img" style="max-height: 200px; display: none;">
+        </div>
+
+        <div class="result-box">
+            Kết quả Class ID: <span id="test-result" style="color: #007bff; font-size: 1.2em;">--</span>
+        </div>
+    </div>
+
+    <script>
+        // API Endpoints
+        const API_GET_ALL = "/models/";
+        const API_GET_CURRENT = "/models/current";
+        const API_SELECT = "/models/select";
+        const API_CLASSIFY = "/classify"; // URL của blueprint classify
+
+        // --- PHẦN 1: QUẢN LÝ MODEL (Giữ nguyên) ---
+        async function loadModelData() {
+            try {
+                const [listRes, currentRes] = await Promise.all([
+                    fetch(API_GET_ALL),
+                    fetch(API_GET_CURRENT)
+                ]);
+                const models = await listRes.json();
+                const currentModel = await currentRes.json();
+
+                document.getElementById('current-model-display').innerText = currentModel;
+                const selectBox = document.getElementById('model-select');
+                selectBox.innerHTML = '';
+
+                models.forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model;
+                    option.text = model;
+                    if (model === currentModel) option.selected = true;
+                    selectBox.appendChild(option);
+                });
+            } catch (error) {
+                console.error(error);
+            }
+        }
+
+        async function changeModel() {
+            const modelName = document.getElementById('model-select').value;
+            const msg = document.getElementById('model-msg');
+            msg.innerText = "Đang xử lý...";
+
+            try {
+                const res = await fetch(API_SELECT, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ model_name: modelName })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    msg.innerText = "Thành công!";
+                    msg.style.color = "green";
+                    document.getElementById('current-model-display').innerText = modelName;
+                } else {
+                    msg.innerText = "Lỗi: " + data.message;
+                    msg.style.color = "red";
+                }
+            } catch (e) {
+                msg.innerText = "Lỗi mạng!";
+            }
+        }
+
+        // --- PHẦN 2: TEST CLASSIFY (MỚI) ---
+
+        // Hiển thị ảnh xem trước khi chọn file
+        function previewImage() {
+            const file = document.getElementById('test-upload').files[0];
+            const preview = document.getElementById('preview-img');
+            if (file) {
+                preview.src = URL.createObjectURL(file);
+                preview.style.display = 'inline';
+            }
+        }
+
+        // Gửi ảnh lên API /classify/
+        async function uploadAndClassify() {
+            const fileInput = document.getElementById('test-upload');
+            const resultSpan = document.getElementById('test-result');
+
+            if (fileInput.files.length === 0) {
+                alert("Vui lòng chọn ảnh trước!");
+                return;
+            }
+
+            const file = fileInput.files[0];
+            resultSpan.innerText = "Đang gửi...";
+
+            try {
+                // Quan trọng: Gửi file dưới dạng RAW BODY (Binary)
+                // Không dùng FormData vì Python code của bạn đọc request.data trực tiếp
+                const response = await fetch(API_CLASSIFY, {
+                    method: 'POST',
+                    body: file, // Gửi thẳng object File vào body
+                    headers: {
+                        'Content-Type': file.type // vd: image/jpeg
+                    }
+                });
+
+                if (response.ok) {
+                    const classId = await response.text(); // Server trả về string class_id
+                    resultSpan.innerText = classId;
+                } else {
+                    resultSpan.innerText = "Lỗi: " + response.status;
+                }
+            } catch (error) {
+                console.error(error);
+                resultSpan.innerText = "Lỗi kết nối!";
+            }
+        }
+
+        window.onload = loadModelData;
+    </script>
+</body>
+</html>
