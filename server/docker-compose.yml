@@ -1,0 +1,17 @@
+services:
+  backend:
+    image: greenbox
+    build: .
+    container_name: greenbox_server
+    ports:
+      - "5000:5000"
+    volumes:
+      - .:/app # for hot reload
+      - ./models:/app/models
+      - ./images:/app/images
+    environment:
+      - FLASK_DEBUG=1
+#      - FLASK_ENV=production
+    restart: unless-stopped
+
+

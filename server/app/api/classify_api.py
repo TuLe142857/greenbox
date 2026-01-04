@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify
 import cv2
 import numpy as np
 
-from service import ClassifyService
+from app.service import ClassifyService
 
 classify_bp = Blueprint('classify_api', __name__, url_prefix="/classify")
 

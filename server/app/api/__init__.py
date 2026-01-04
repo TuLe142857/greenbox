@@ -1,7 +1,7 @@
 import cv2
 from flask import Flask, Blueprint, render_template, Response
 
-from service import ClassifyService
+from ..service import ClassifyService
 from .classify_api import classify_bp
 from .model_api import models_bp
 
