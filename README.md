@@ -40,7 +40,8 @@ git clone https://github.com/TuLe142857/greenbox.git
     docker compose -p greenbox up -d --build  
 ```
 
-> [!NOTE] Server mặc định chạy trên port 5000  
+> [!NOTE]
+> Server mặc định chạy trên port 5000  
 > Server sẽ lưu toàn bộ ảnh được gởi lên phân loại qua api `/classify` vào thư mục `server/images`  
 > Model phân loại rác lưu ở `server/models`, mặc định dùng [yolo11s_640x640_2-1.pt](server/models/yolo11s_640x640_2-1.pt)
 > nếu dùng model khác, chuyển file model đó vào mục `server/models` và truy cập http://localhost:5000/ để chọn model được sử dụng
@@ -64,7 +65,8 @@ cd greenbox
 cp esp32-cam/src/blynk_config.example.h esp32-cam/src/blynk_config.h
 ```
 
-> [!NOTE] Cấu hình Blynk để có thể chạy với project  
+> [!NOTE]
+> Cấu hình Blynk để có thể chạy với project  
 > Tạo tài khoản Blynk, create template với ESP32 sau đó cấu hình datastream và notifications như sau:
 > ![blynk-datastream-config](demo-imgs/blynk_datastreams.png)
 > ![blynk-notification-config](demo-imgs/blynk_notification.png)
